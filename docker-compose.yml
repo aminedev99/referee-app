@@ -1,0 +1,55 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: referee_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: referee_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d referee_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+    container_name: referee_backend
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/referee_db
+      SECRET_KEY: super-secret-key-for-jwt-referee-app-2026
+      RECEIPTS_DIR: /code/receipts
+      PORT: 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./receipts:/code/receipts
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_USE_MOCK: "false"
+    container_name: referee_frontend
+    environment:
+      PORT: 3000
+      NEXT_PUBLIC_USE_MOCK: "false"
+      API_PROXY_TARGET: http://backend:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
