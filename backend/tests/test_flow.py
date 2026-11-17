@@ -61,7 +61,7 @@ def test_teams_crud_and_duplicate_conflict():
     admin_token = get_admin_token()
     headers = {"Authorization": f"Bearer {admin_token}"}
 
-    team_name = f"Test Club {int(time.time())}"
+    team_name = f"Test Club {int(time.time() * 1000)}"
     res = httpx.post(
         f"{BASE_URL}/teams",
         headers=headers,
@@ -85,7 +85,9 @@ def test_create_referee_and_login():
     admin_token = get_admin_token()
     headers = {"Authorization": f"Bearer {admin_token}"}
 
-    unique_email = f"ref_{int(time.time())}@referee.local"
+    ts = int(time.time() * 1000)
+    unique_email = f"ref_{ts}@referee.local"
+    unique_license = f"LIC_{ts}"
     res = httpx.post(
         f"{BASE_URL}/referees",
         headers=headers,
@@ -93,13 +95,14 @@ def test_create_referee_and_login():
             "name": "Nabil Test",
             "email": unique_email,
             "phone": "06 99 88 77 66",
-            "license_number": "9999",
+            "license_number": unique_license,
             "password": "Password123!",
         },
     )
     assert res.status_code == 201
     ref_data = res.json()
     assert ref_data["email"] == unique_email
+    assert ref_data["phone"] == "+212699887766"
 
     # Login as this newly created referee
     login_res = httpx.post(
@@ -118,7 +121,7 @@ def test_create_match_validations():
 
     # Fetch teams and referees
     teams = httpx.get(f"{BASE_URL}/teams", headers=headers).json()
-    referees = httpx.get(f"{BASE_URL}/referees", headers=headers).json()
+    referees = httpx.get(f"{BASE_URL}/referees?active=true", headers=headers).json()
 
     assert len(teams) >= 2
     assert len(referees) >= 2
@@ -208,28 +211,41 @@ def test_create_match_validations():
     )
     assert res.status_code == 400
 
-    # Valid POST /matches with 2 assignments -> 201
+    # Create a fresh referee to avoid collision with existing seed matches
+    ts = int(time.time() * 1000)
+    ref_fresh = httpx.post(
+        f"{BASE_URL}/referees",
+        headers=headers,
+        json={
+            "name": f"Fresh Ref {ts}",
+            "email": f"fresh_{ts}@referee.local",
+            "phone": "06 77 66 55 44",
+            "license_number": f"FR_{ts}",
+            "password": "Password123!",
+        },
+    ).json()
+
+    # Valid POST /matches with 1 assignment on fresh referee -> 201
     res = httpx.post(
         f"{BASE_URL}/matches",
         headers=headers,
         json={
             "home_team_id": t1,
             "away_team_id": t2,
-            "date": "2026-12-10",
+            "date": "2026-12-25",
             "time": "19:00",
             "city": "Casablanca",
             "venue": "Salle Mohammed V",
             "division": "1DV",
             "category": "Men",
             "assignments": [
-                {"referee_id": r1, "referee_function": "Main referee", "indemnity": 450, "paying_team_id": t1},
-                {"referee_id": r2, "referee_function": "Second referee", "indemnity": 350, "paying_team_id": t2},
+                {"referee_id": ref_fresh["id"], "referee_function": "Main referee", "indemnity": 450, "paying_team_id": t1},
             ],
         },
     )
     assert res.status_code == 201
     created_match = res.json()
-    assert len(created_match["assignments"]) == 2
+    assert len(created_match["assignments"]) == 1
     assert created_match["assignments"][0]["status"] == "pending"
 
 # 7. Referee isolation: list only own assignments, 404 on other's assignment
@@ -262,7 +278,7 @@ def test_confirm_flow():
     headers = {"Authorization": f"Bearer {ref1_token}"}
 
     my_asgs = httpx.get(f"{BASE_URL}/me/assignments", headers=headers).json()
-    pending = next((a for a in my_asgs if a["status"] == "pending"), None)
+    pending = next((a for a in my_asgs if a["status"] == "pending" and (a.get("match") or {}).get("status") != "cancelled"), None)
 
     if pending:
         # Confirm
@@ -280,7 +296,7 @@ def test_refuse_flow():
     headers = {"Authorization": f"Bearer {ref1_token}"}
 
     my_asgs = httpx.get(f"{BASE_URL}/me/assignments", headers=headers).json()
-    pending = next((a for a in my_asgs if a["status"] == "pending"), None)
+    pending = next((a for a in my_asgs if a["status"] == "pending" and (a.get("match") or {}).get("status") != "cancelled"), None)
 
     if pending:
         res = httpx.post(

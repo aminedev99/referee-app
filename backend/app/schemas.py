@@ -24,7 +24,21 @@ class UserOut(BaseSchema):
     email: str
     name: str
     role: str
+    is_active: bool = True
     referee_id: Optional[str] = None
+    phone: Optional[str] = None
+
+class UserUpdate(BaseSchema):
+    full_name: Optional[str] = None
+    name: Optional[str] = None
+    phone: Optional[str] = None
+
+class ChangePasswordInput(BaseSchema):
+    current_password: str
+    new_password: str
+
+class ResetPasswordInput(BaseSchema):
+    password: str
 
 class LoginResponse(BaseSchema):
     access_token: str
@@ -40,6 +54,7 @@ class RefereeSummaryOut(BaseSchema):
     phone: str
     license_number: str
     category: Optional[str] = "National Referee"
+    is_active: bool = True
 
 class RefereeOut(RefereeSummaryOut):
     matches_count: int = 0
@@ -49,18 +64,27 @@ class RefereeOut(RefereeSummaryOut):
     refused_count: Optional[int] = 0
 
 class RefereeCreate(BaseSchema):
-    name: Optional[str] = None
     full_name: Optional[str] = None
+    name: Optional[str] = None
     email: str
     phone: str
     license_number: str
     password: Optional[str] = None
     temporary_password: Optional[str] = None
 
+class RefereeUpdate(BaseSchema):
+    full_name: Optional[str] = None
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    license_number: Optional[str] = None
+    is_active: Optional[bool] = None
+
 class ReceiptOut(BaseSchema):
     id: str
     assignment_id: str
     receipt_number: str
+    number: Optional[str] = None
     issued_at: str
     amount: float
     amount_in_words: Optional[str] = None
@@ -79,6 +103,7 @@ class MatchSummaryOut(BaseSchema):
     venue: str
     division: str
     category: str
+    status: str = "scheduled"
 
 class AssignmentOut(BaseSchema):
     id: str
@@ -93,10 +118,18 @@ class AssignmentOut(BaseSchema):
     status: str
     refusal_reason: Optional[str] = None
     receipt: Optional[ReceiptOut] = None
+    last_reminded_at: Optional[Union[str, datetime]] = None
+    needs_attention: bool = False
     created_at: Optional[Union[str, datetime]] = None
 
     @field_serializer("created_at")
     def serialize_created_at(self, dt: Optional[Union[str, datetime]], _info) -> Optional[str]:
+        if isinstance(dt, datetime):
+            return dt.isoformat()
+        return dt
+
+    @field_serializer("last_reminded_at")
+    def serialize_last_reminded_at(self, dt: Optional[Union[str, datetime]], _info) -> Optional[str]:
         if isinstance(dt, datetime):
             return dt.isoformat()
         return dt
@@ -116,7 +149,7 @@ class MatchCreate(BaseSchema):
     city: str
     venue: str
     division: str # "1DV" | "2DV"
-    category: str # "Men" | "Women" (or "men" | "women")
+    category: str # "Men" | "Women"
     assignments: List[AssignmentCreate]
 
 class MatchUpdate(BaseSchema):

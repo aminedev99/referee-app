@@ -2,6 +2,7 @@ import os
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
+    ENV: str = os.getenv("ENV", "development")
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/referee_db")
     SECRET_KEY: str = os.getenv("SECRET_KEY", "super-secret-key-for-jwt-referee-app-2026")
     ALGORITHM: str = "HS256"

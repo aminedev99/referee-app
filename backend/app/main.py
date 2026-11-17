@@ -1,6 +1,6 @@
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,12 +10,14 @@ from sqlalchemy import or_
 
 from app.config import settings
 from app.database import engine, Base, SessionLocal
+from app.migrations import run_migrations
 from app.deps import get_db, get_current_user, require_admin
 from app.models import User, Referee, Team, Match, Assignment, Receipt, Notification
-from app.schemas import UserOut, LoginResponse, AdminStatsOut
+from app.schemas import UserOut, UserUpdate, ChangePasswordInput, LoginResponse, AdminStatsOut
 from app.security import verify_password, get_password_hash, create_access_token
 from app.services.receipts import generate_receipt_pdf, get_amount_in_words_fr
 from app.services.notifications import notify
+from app.services.phone import normalize_moroccan_phone
 
 # Routers
 from app.routers import (
@@ -37,6 +39,7 @@ def seed_database(db: Session) -> None:
             name="System Admin",
             hashed_password=get_password_hash(settings.SEED_ADMIN_PASSWORD),
             role="admin",
+            is_active=True,
         )
         db.add(admin)
         db.commit()
@@ -64,37 +67,49 @@ def seed_database(db: Session) -> None:
         created_teams[td["name"]] = t
     db.flush()
 
-    # 3. Referees
+    # 3. Referees (including an inactive referee and real normalized phone numbers & unique licenses)
     ref_pw = get_password_hash("Referee12345!")
     referees_data = [
         {
             "name": "Youssef El Amrani",
             "email": "referee@referee.local",
             "alias_email": "y.elamrani@mail.ma",
-            "phone": "06 61 23 45 67",
+            "phone": "+212661234567",
             "license": "1104",
             "category": "National Referee",
+            "is_active": True,
         },
         {
             "name": "Karim Benali",
             "email": "k.benali@mail.ma",
-            "phone": "06 62 34 56 78",
+            "phone": "+212662345678",
             "license": "1088",
             "category": "Regional Referee",
+            "is_active": True,
         },
         {
             "name": "Sara Idrissi",
             "email": "s.idrissi@mail.ma",
-            "phone": "06 63 45 67 89",
-            "license": "1104",
+            "phone": "+212663456789",
+            "license": "1115",
             "category": "National Referee",
+            "is_active": True,
         },
         {
             "name": "Omar Tazi",
             "email": "o.tazi@mail.ma",
-            "phone": "06 64 56 78 90",
+            "phone": "+212664567890",
             "license": "1120",
             "category": "Regional Referee",
+            "is_active": True,
+        },
+        {
+            "name": "Hassan Mansouri",
+            "email": "h.mansouri@mail.ma",
+            "phone": "+212665123456",
+            "license": "1099",
+            "category": "Regional Referee",
+            "is_active": False,
         },
     ]
     created_refs: dict[str, Referee] = {}
@@ -104,6 +119,7 @@ def seed_database(db: Session) -> None:
             name=rd["name"],
             hashed_password=ref_pw,
             role="referee",
+            is_active=rd["is_active"],
         )
         db.add(u)
         db.flush()
@@ -115,60 +131,72 @@ def seed_database(db: Session) -> None:
             phone=rd["phone"],
             license_number=rd["license"],
             category=rd["category"],
+            is_active=rd["is_active"],
         )
         db.add(ref)
         created_refs[rd["name"]] = ref
     db.flush()
 
-    # 4. Matches
+    # 4. Matches (including a pending assignment within 24h and a cancelled match)
+    tomorrow_dt = datetime.now() + timedelta(hours=18)
+    tomorrow_date_str = tomorrow_dt.strftime("%Y-%m-%d")
+    tomorrow_time_str = tomorrow_dt.strftime("%H:%M")
+
+    next_week_date_str = (datetime.now() + timedelta(days=6)).strftime("%Y-%m-%d")
+
     matches_data = [
-        # Upcoming
+        # Upcoming within 24h with pending assignment (needs_attention = True)
         {
             "number": "2026-88",
             "home": "Wydad AC",
             "away": "Raja CA",
-            "date": "2026-11-22",
-            "time": "18:30",
+            "date": tomorrow_date_str,
+            "time": tomorrow_time_str,
             "city": "Casablanca",
             "venue": "Salle Mohammed V",
             "div": "1DV",
             "cat": "Men",
+            "status": "scheduled",
             "asgs": [
                 {"ref": "Youssef El Amrani", "fn": "Main referee", "ind": 400.0, "paying": "Wydad AC", "status": "pending"},
                 {"ref": "Karim Benali", "fn": "Second referee", "ind": 300.0, "paying": "Raja CA", "status": "confirmed"},
             ],
         },
+        # Upcoming in 6 days
         {
             "number": "2026-89",
             "home": "FUS Rabat",
             "away": "AS Salé",
-            "date": "2026-11-23",
+            "date": next_week_date_str,
             "time": "16:00",
             "city": "Rabat",
             "venue": "Salle Moulay Abdallah",
             "div": "2DV",
             "cat": "Women",
+            "status": "scheduled",
             "asgs": [
                 {"ref": "Youssef El Amrani", "fn": "Second referee", "ind": 300.0, "paying": "FUS Rabat", "status": "pending"},
-                {"ref": "Karim Benali", "fn": "Main referee", "ind": 400.0, "paying": "AS Salé", "status": "refused", "reason": "unavailable that weekend"},
+                {"ref": "Sara Idrissi", "fn": "Main referee", "ind": 400.0, "paying": "AS Salé", "status": "confirmed"},
             ],
         },
+        # Cancelled Match
         {
-            "number": "2026-90",
+            "number": "2026-95",
             "home": "IR Tanger",
-            "away": "KAC Kénitra",
-            "date": "2026-11-26",
+            "away": "AS Salé",
+            "date": next_week_date_str,
             "time": "19:00",
             "city": "Tanger",
             "venue": "Salle Ziatin",
             "div": "1DV",
             "cat": "Men",
+            "status": "cancelled",
             "asgs": [
-                {"ref": "Youssef El Amrani", "fn": "Main referee", "ind": 400.0, "paying": "IR Tanger", "status": "confirmed"},
-                {"ref": "Karim Benali", "fn": "Second referee", "ind": 350.0, "paying": "KAC Kénitra", "status": "refused", "reason": "unavailable that weekend"},
+                {"ref": "Karim Benali", "fn": "Main referee", "ind": 400.0, "paying": "IR Tanger", "status": "refused", "reason": "Match cancelled"},
+                {"ref": "Sara Idrissi", "fn": "Second referee", "ind": 350.0, "paying": "AS Salé", "status": "confirmed"},
             ],
         },
-        # Past
+        # Past Matches
         {
             "number": "2026-75",
             "home": "Raja CA",
@@ -179,6 +207,7 @@ def seed_database(db: Session) -> None:
             "venue": "Salle Mohammed V",
             "div": "1DV",
             "cat": "Men",
+            "status": "scheduled",
             "asgs": [
                 {"ref": "Youssef El Amrani", "fn": "Main referee", "ind": 400.0, "paying": "Raja CA", "status": "confirmed", "receipt": True},
             ],
@@ -193,6 +222,7 @@ def seed_database(db: Session) -> None:
             "venue": "Salle Fathallah El Bouazzaoui",
             "div": "1DV",
             "cat": "Men",
+            "status": "scheduled",
             "asgs": [
                 {"ref": "Youssef El Amrani", "fn": "Main referee", "ind": 350.0, "paying": "AS Salé", "status": "confirmed", "receipt": True},
             ],
@@ -207,6 +237,7 @@ def seed_database(db: Session) -> None:
             "venue": "Salle Al Wahda",
             "div": "2DV",
             "cat": "Men",
+            "status": "scheduled",
             "asgs": [
                 {"ref": "Youssef El Amrani", "fn": "Second referee", "ind": 300.0, "paying": "KAC Kénitra", "status": "refused", "reason": "Family emergency"},
             ],
@@ -225,6 +256,7 @@ def seed_database(db: Session) -> None:
             venue=md["venue"],
             division=md["div"],
             category=md["cat"],
+            status=md["status"],
             created_by_id=admin.id,
         )
         db.add(m)
@@ -252,6 +284,7 @@ def seed_database(db: Session) -> None:
                 rcpt = Receipt(
                     assignment_id=asg.id,
                     receipt_number=rcpt_num,
+                    number=rcpt_num,
                     issued_at="16 Nov 2026",
                     amount=float(ad["ind"]),
                     amount_in_words=amount_words,
@@ -274,19 +307,19 @@ def seed_database(db: Session) -> None:
     # 5. Initial Notifications
     youssef_ref = created_refs.get("Youssef El Amrani")
     if youssef_ref and youssef_ref.user_id:
-        notify(db, youssef_ref.user_id, "Wydad AC vs Raja CA, 22 Nov 2026", type="assignment", title="New assignment")
+        notify(db, youssef_ref.user_id, f"Wydad AC vs Raja CA, {tomorrow_date_str}", type="assignment", title="New assignment")
         notify(db, youssef_ref.user_id, "Raja CA vs FUS Rabat", type="receipt", title="Receipt available")
 
-    notify(db, admin.id, "Karim Benali refused FUS Rabat vs AS Salé", type="refusal", title="Karim Benali refused")
-    notify(db, admin.id, "Youssef El Amrani confirmed Wydad AC vs Raja CA", type="confirmation", title="Youssef El Amrani confirmed")
+    notify(db, admin.id, "Karim Benali confirmed Wydad AC vs Raja CA", type="confirmation", title="Karim Benali confirmed")
 
     db.commit()
     print("Database successfully seeded.")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: create tables and seed
+    # Startup: create tables, run migrations, and seed
     Base.metadata.create_all(bind=engine)
+    run_migrations()
     db = SessionLocal()
     try:
         seed_database(db)
@@ -295,12 +328,17 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown
 
+docs_url = "/docs" if settings.ENV == "development" else None
+redoc_url = "/redoc" if settings.ENV == "development" else None
+openapi_url = "/openapi.json" if settings.ENV == "development" else None
+
 app = FastAPI(
     title="Referee Manager API",
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=docs_url,
+    redoc_url=redoc_url,
+    openapi_url=openapi_url,
 )
 
 # CORS Middleware (permissive for local development)
@@ -312,7 +350,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Health endpoint
+# Health endpoint (public)
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
@@ -345,9 +383,18 @@ def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account is deactivated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     referee_id: Optional[str] = None
+    phone_val: Optional[str] = None
     if user.role == "referee" and user.referee:
         referee_id = user.referee.id
+        phone_val = user.referee.phone
 
     access_token = create_access_token(
         data={"sub": user.id, "role": user.role, "email": user.email}
@@ -362,7 +409,9 @@ def login(
             email=user.email,
             name=user.name,
             role=user.role,
+            is_active=user.is_active,
             referee_id=referee_id,
+            phone=phone_val,
         ),
     )
 
@@ -372,16 +421,75 @@ def get_auth_me(
     db: Session = Depends(get_db),
 ) -> UserOut:
     referee_id: Optional[str] = None
+    phone_val: Optional[str] = None
     if current_user.role == "referee" and current_user.referee:
         referee_id = current_user.referee.id
+        phone_val = current_user.referee.phone
 
     return UserOut(
         id=current_user.id,
         email=current_user.email,
         name=current_user.name,
         role=current_user.role,
+        is_active=current_user.is_active,
         referee_id=referee_id,
+        phone=phone_val,
     )
+
+@app.put("/api/auth/me", response_model=UserOut)
+def update_auth_me(
+    update_in: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserOut:
+    new_name = update_in.full_name or update_in.name
+    if new_name is not None and new_name.strip():
+        current_user.name = new_name.strip()
+        if current_user.referee:
+            current_user.referee.name = new_name.strip()
+
+    if update_in.phone is not None:
+        normalized_phone = normalize_moroccan_phone(update_in.phone)
+        if current_user.referee:
+            current_user.referee.phone = normalized_phone
+
+    db.commit()
+    db.refresh(current_user)
+
+    referee_id = current_user.referee.id if current_user.referee else None
+    phone_val = current_user.referee.phone if current_user.referee else None
+
+    return UserOut(
+        id=current_user.id,
+        email=current_user.email,
+        name=current_user.name,
+        role=current_user.role,
+        is_active=current_user.is_active,
+        referee_id=referee_id,
+        phone=phone_val,
+    )
+
+@app.post("/api/auth/change-password")
+def change_password(
+    pwd_in: ChangePasswordInput,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not verify_password(pwd_in.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+
+    if len(pwd_in.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 8 characters long",
+        )
+
+    current_user.hashed_password = get_password_hash(pwd_in.new_password)
+    db.commit()
+    return {"status": "ok", "message": "Password changed successfully"}
 
 @app.get("/api/admin/stats", response_model=AdminStatsOut)
 def get_admin_stats(
@@ -389,9 +497,9 @@ def get_admin_stats(
     current_user: User = Depends(require_admin),
 ) -> AdminStatsOut:
     today_str = datetime.now().strftime("%Y-%m-%d")
-    upcoming_count = db.query(Match).filter(Match.date >= today_str).count()
-    pending_count = db.query(Assignment).filter(Assignment.status == "pending").count()
-    refused_count = db.query(Assignment).filter(Assignment.status == "refused").count()
+    upcoming_count = db.query(Match).filter(Match.status != "cancelled", Match.date >= today_str).count()
+    pending_count = db.query(Assignment).join(Match).filter(Match.status != "cancelled", Assignment.status == "pending").count()
+    refused_count = db.query(Assignment).join(Match).filter(Match.status != "cancelled", Assignment.status == "refused").count()
 
     return AdminStatsOut(
         upcoming_matches=upcoming_count,

@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Calendar } from "lucide-react";
+import { Plus, Trash2, Calendar, AlertCircle, MapPin, Search } from "lucide-react";
 import {
   Match,
   Team,
@@ -20,7 +20,7 @@ import { Select } from "./ui/Select";
 import { Field } from "./ui/Field";
 import { SegmentedControl } from "./ui/SegmentedControl";
 import { Card } from "./ui/Card";
-import { ConfirmDialog } from "./ui/ConfirmDialog";
+import { Modal } from "./ui/Modal";
 
 const refereeAssignmentSchema = z.object({
   referee_id: z.string().min(1, "Select a referee"),
@@ -78,6 +78,14 @@ export const MatchForm: React.FC<MatchFormProps> = ({
   const router = useRouter();
   const [showConfirm, setShowConfirm] = useState(false);
   const [pendingValues, setPendingValues] = useState<MatchFormData | null>(null);
+  const [conflictError, setConflictError] = useState<string | null>(null);
+  const [refSearch, setRefSearch] = useState<Record<number, string>>({});
+  const refereesSectionRef = useRef<HTMLDivElement>(null);
+
+  const isEdit = Boolean(initialData);
+
+  // Filter to active referees only (or if initialData assignment has a referee, keep it)
+  const activeReferees = referees.filter((r) => r.is_active !== false);
 
   const defaultAssignments = initialData?.assignments?.map((a) => ({
     referee_id: a.referee_id,
@@ -86,13 +94,13 @@ export const MatchForm: React.FC<MatchFormProps> = ({
     paying_team_id: a.paying_team_id,
   })) || [
     {
-      referee_id: referees[0]?.id || "",
+      referee_id: activeReferees[0]?.id || "",
       referee_function: "Main referee",
       indemnity: 400,
       paying_team_id: teams[0]?.id || "",
     },
     {
-      referee_id: referees[1]?.id || "",
+      referee_id: activeReferees[1]?.id || "",
       referee_function: "Second referee",
       indemnity: 300,
       paying_team_id: teams[1]?.id || "",
@@ -104,18 +112,18 @@ export const MatchForm: React.FC<MatchFormProps> = ({
     control,
     handleSubmit,
     watch,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<MatchFormData>({
     resolver: zodResolver(matchFormSchema) as never,
     defaultValues: {
       home_team_id: initialData?.home_team_id || teams[0]?.id || "",
       away_team_id: initialData?.away_team_id || teams[1]?.id || "",
-      date: initialData?.date || "2026-11-22",
+      date: initialData?.date || new Date(Date.now() + 86400000 * 2).toISOString().slice(0, 10),
       time: initialData?.time || "18:30",
       city: initialData?.city || "Casablanca",
       venue: initialData?.venue || "Salle Mohammed V",
-      division: initialData?.division || "1DV",
-      category: initialData?.category || "Men",
+      division: (initialData?.division as MatchDivision) || "1DV",
+      category: (initialData?.category as MatchCategory) || "Men",
       assignments: defaultAssignments,
     },
   });
@@ -131,27 +139,49 @@ export const MatchForm: React.FC<MatchFormProps> = ({
   const watchedDate = watch("date");
   const watchedTime = watch("time");
   const watchedVenue = watch("venue");
+  const watchedCity = watch("city");
 
   const totalIndemnities = watchedAssignments.reduce(
     (sum, a) => sum + (Number(a.indemnity) || 0),
     0
   );
 
+  const onError = (formErrors: typeof errors) => {
+    // Scroll to the first error element
+    const firstErrorKey = Object.keys(formErrors)[0];
+    if (firstErrorKey) {
+      const el = document.getElementById(firstErrorKey) || document.querySelector(`[name^="${firstErrorKey}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+  };
+
   const onPreSubmit = (values: MatchFormData) => {
+    setConflictError(null);
     setPendingValues(values);
     setShowConfirm(true);
   };
 
   const handleConfirmedSubmit = async () => {
     if (!pendingValues) return;
-    await onSubmit({
-      ...pendingValues,
-      assignments: pendingValues.assignments.map((a) => ({
-        ...a,
-        indemnity: Number(a.indemnity),
-      })),
-    });
-    setShowConfirm(false);
+    try {
+      setConflictError(null);
+      await onSubmit({
+        ...pendingValues,
+        assignments: pendingValues.assignments.map((a) => ({
+          ...a,
+          indemnity: Number(a.indemnity),
+        })),
+      });
+      setShowConfirm(false);
+    } catch (err: unknown) {
+      setShowConfirm(false);
+      const msg = err instanceof Error ? err.message : "Failed to save match";
+      setConflictError(msg);
+      // Scroll to referees section where error banner is located
+      refereesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   };
 
   const homeTeam = teams.find((t) => t.id === homeTeamId);
@@ -159,12 +189,12 @@ export const MatchForm: React.FC<MatchFormProps> = ({
 
   return (
     <>
-      <form onSubmit={handleSubmit(onPreSubmit)} className="flex flex-col gap-6 pb-28">
+      <form onSubmit={handleSubmit(onPreSubmit, onError)} className="flex flex-col gap-6 pb-28">
         {/* Match Section */}
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-brand" />
-            <h2 className="text-[18px] font-semibold text-ink">Match</h2>
+            <h2 className="text-[18px] font-semibold text-ink">Match details</h2>
           </div>
 
           <Field
@@ -287,7 +317,7 @@ export const MatchForm: React.FC<MatchFormProps> = ({
         </div>
 
         {/* Referees Section */}
-        <div className="flex flex-col gap-4 pt-2">
+        <div ref={refereesSectionRef} className="flex flex-col gap-4 pt-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-brand" />
@@ -301,15 +331,30 @@ export const MatchForm: React.FC<MatchFormProps> = ({
             )}
           </div>
 
+          {/* Backend 409 conflict error banner */}
+          {conflictError && (
+            <div className="p-3.5 bg-danger-tint border border-danger/30 rounded-[12px] flex items-start gap-2.5 text-danger text-[13px] animate-fadeIn">
+              <AlertCircle size={18} className="shrink-0 mt-0.5" />
+              <div className="flex-1 font-medium">{conflictError}</div>
+            </div>
+          )}
+
           <div className="flex flex-col gap-3">
             {fields.map((item, index) => {
               const fieldError = errors.assignments?.[index];
+              const searchFilter = (refSearch[index] || "").toLowerCase();
+              const filteredRefs = activeReferees.filter(
+                (r) =>
+                  !searchFilter ||
+                  r.name.toLowerCase().includes(searchFilter) ||
+                  r.license_number.toLowerCase().includes(searchFilter)
+              );
 
               return (
                 <Card key={item.id} className="flex flex-col gap-3 p-4">
                   <div className="flex items-center justify-between">
                     <span className="text-[14px] font-semibold text-ink">
-                      Referee {index + 1}
+                      Official {index + 1}
                     </span>
                     {fields.length > 1 && (
                       <button
@@ -323,6 +368,21 @@ export const MatchForm: React.FC<MatchFormProps> = ({
                     )}
                   </div>
 
+                  {/* Search filter for referee selection */}
+                  {activeReferees.length > 4 && (
+                    <div className="relative">
+                      <Input
+                        placeholder="Search referee by name or license..."
+                        value={refSearch[index] || ""}
+                        onChange={(e) =>
+                          setRefSearch((prev) => ({ ...prev, [index]: e.target.value }))
+                        }
+                        leftIcon={<Search size={15} strokeWidth={1.75} />}
+                        className="text-[13px] h-9"
+                      />
+                    </div>
+                  )}
+
                   <Field
                     label="Referee"
                     error={fieldError?.referee_id?.message}
@@ -330,7 +390,7 @@ export const MatchForm: React.FC<MatchFormProps> = ({
                   >
                     <Select {...register(`assignments.${index}.referee_id`)}>
                       <option value="">Select official</option>
-                      {referees.map((r) => (
+                      {filteredRefs.map((r) => (
                         <option key={r.id} value={r.id}>
                           {r.name} ({r.license_number})
                         </option>
@@ -397,7 +457,7 @@ export const MatchForm: React.FC<MatchFormProps> = ({
                 referee_id: "",
                 referee_function: "Second referee",
                 indemnity: 300,
-                paying_team_id: teams[0]?.id || "",
+                paying_team_id: homeTeamId || teams[0]?.id || "",
               })
             }
           >
@@ -414,8 +474,8 @@ export const MatchForm: React.FC<MatchFormProps> = ({
           </div>
         </div>
 
-        {/* Sticky action bar */}
-        <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-surface border-t border-line p-4 flex items-center gap-3 z-30">
+        {/* Fixed bottom action bar (above safe area) */}
+        <div className="fixed bottom-0 left-0 right-0 md:left-60 bg-surface border-t border-line p-4 pb-[max(1rem,env(safe-area-inset-bottom))] flex items-center gap-3 z-40 shadow-lg">
           <Button
             type="button"
             variant="secondary"
@@ -431,38 +491,87 @@ export const MatchForm: React.FC<MatchFormProps> = ({
             size="lg"
             className="flex-1"
             loading={isLoading}
+            disabled={isEdit && !isDirty}
           >
-            Create match & assign
+            {isEdit ? "Save changes" : "Create match and send invitations"}
           </Button>
         </div>
       </form>
 
-      {/* Confirmation Dialog / Sheet (Screen 12) */}
-      <ConfirmDialog
+      {/* Summary Sheet Modal */}
+      <Modal
         isOpen={showConfirm}
         onClose={() => setShowConfirm(false)}
-        onConfirm={handleConfirmedSubmit}
-        title="Create this match?"
-        subtitle="Please review the summary before confirming"
-        confirmLabel="Create and notify referees"
-        cancelLabel="Back"
-        isLoading={isLoading}
+        title={isEdit ? "Confirm match changes" : "Create match summary"}
+        subtitle={isEdit ? "Review updated match details" : "Review assignments before notifying referees"}
       >
-        <div className="bg-canvas p-4 rounded-[12px] border border-line flex flex-col gap-2">
-          <h4 className="text-[16px] font-bold text-ink">
-            {homeTeam?.name || "Home"} vs {awayTeam?.name || "Away"}
-          </h4>
-          <div className="flex items-center gap-2 text-[13px] text-ink-muted">
-            <Calendar size={15} strokeWidth={1.75} />
-            <span>
-              {watchedDate} {watchedTime} • {watchedVenue}
-            </span>
+        <div className="flex flex-col gap-4">
+          <div className="bg-canvas p-4 rounded-[12px] border border-line flex flex-col gap-2.5">
+            <h3 className="text-[16px] font-bold text-ink">
+              {homeTeam?.name || "Home"} vs {awayTeam?.name || "Away"}
+            </h3>
+            <div className="flex flex-col gap-1 text-[13px] text-ink-muted">
+              <span className="flex items-center gap-1.5">
+                <Calendar size={14} strokeWidth={1.75} />
+                {watchedDate} at {watchedTime}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <MapPin size={14} strokeWidth={1.75} />
+                {watchedVenue}, {watchedCity}
+              </span>
+            </div>
           </div>
-          <div className="text-[13px] text-ink font-medium mt-1">
-            {watchedAssignments.length} referees, {totalIndemnities} MAD total
+
+          <div className="flex flex-col gap-2">
+            <h4 className="text-[13px] font-semibold text-ink">Assigned Officials</h4>
+            <div className="divide-y divide-line border border-line rounded-[12px] overflow-hidden bg-surface">
+              {watchedAssignments.map((a, idx) => {
+                const r = referees.find((ref) => ref.id === a.referee_id);
+                return (
+                  <div key={idx} className="p-3 flex items-center justify-between text-[13px]">
+                    <div>
+                      <span className="font-semibold text-ink">{r?.name || "Referee"}</span>
+                      <span className="text-ink-muted ml-1.5">({a.referee_function})</span>
+                    </div>
+                    <span className="font-bold text-ink">{a.indemnity} MAD</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between p-3 bg-[#FFF1E8] border border-brand/20 rounded-[12px]">
+            <span className="text-[13px] font-semibold text-brand">Total Indemnities</span>
+            <span className="text-[16px] font-bold text-brand">{totalIndemnities} MAD</span>
+          </div>
+
+          <p className="text-[12px] text-ink-muted text-center">
+            {watchedAssignments.length} invitation{watchedAssignments.length > 1 ? "s" : ""} will be sent
+          </p>
+
+          <div className="flex items-center gap-2 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="lg"
+              className="flex-1"
+              onClick={() => setShowConfirm(false)}
+            >
+              Back
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="lg"
+              className="flex-1"
+              loading={isLoading}
+              onClick={handleConfirmedSubmit}
+            >
+              {isEdit ? "Confirm and save" : "Confirm and send"}
+            </Button>
           </div>
         </div>
-      </ConfirmDialog>
+      </Modal>
     </>
   );
 };

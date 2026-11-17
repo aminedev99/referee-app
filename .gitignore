@@ -6,6 +6,8 @@ __pycache__/
 .venv/
 pgdata/
 receipts/
-ui
+uiS
 receipts
 .pytest_cache 
+.vscode/
+backend/tests/

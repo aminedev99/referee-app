@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/components/ui/Toast";
@@ -9,8 +10,10 @@ import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 
-export default function LoginPage() {
+function LoginForm() {
   const { login } = useAuth();
+  const searchParams = useSearchParams();
+  const nextPath = searchParams.get("next");
   const toast = useToast();
   const [email, setEmail] = useState("y.elamrani@mail.ma");
   const [password, setPassword] = useState("Referee12345!");
@@ -24,7 +27,7 @@ export default function LoginPage() {
       const formData = new URLSearchParams();
       formData.append("username", email);
       formData.append("password", password);
-      await login(formData);
+      await login(formData, nextPath);
       toast.success("Signed in successfully");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to sign in. Please check credentials.";
@@ -55,25 +58,23 @@ export default function LoginPage() {
               viewBox="0 0 24 24"
               fill="none"
               stroke="#EA580C"
-              strokeWidth="1.75"
+              strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
             >
               <circle cx="12" cy="12" r="10" />
               <path d="M4.93 4.93l4.24 4.24" />
-              <path d="M14.83 14.83l4.24 4.24" />
               <path d="M14.83 9.17l4.24-4.24" />
-              <path d="M4.93 19.07l4.24-4.24" />
-              <line x1="12" y1="2" x2="12" y2="22" />
-              <line x1="2" y1="12" x2="22" y2="12" />
+              <path d="M14.83 14.83l4.24 4.24" />
+              <path d="M9.17 14.83L4.93 19.07" />
+              <path d="M12 2v20" />
+              <path d="M2 12h20" />
             </svg>
           </div>
 
-          <h1 className="text-[22px] font-bold text-ink text-center tracking-tight">
-            Referee Manager
-          </h1>
-          <p className="text-[14px] text-ink-muted text-center mt-1 mb-6">
-            Basketball Official Management
+          <h1 className="text-[24px] font-bold text-ink mb-1">Referee Manager</h1>
+          <p className="text-[14px] text-ink-muted mb-6 text-center">
+            Sign in to access your referee schedule and assignments
           </p>
 
           <form onSubmit={handleSubmit} className="w-full flex flex-col gap-4">
@@ -81,36 +82,39 @@ export default function LoginPage() {
               <Input
                 id="email"
                 type="email"
+                placeholder="name@mail.ma"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@mail.ma"
                 required
+                autoComplete="email"
               />
             </Field>
 
             <Field label="Password" htmlFor="password" required>
-              <Input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="•••••••••••••"
-                required
-                rightIcon={
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="cursor-pointer hover:text-ink transition-colors p-1"
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                  >
-                    {showPassword ? (
-                      <EyeOff size={18} strokeWidth={1.75} />
-                    ) : (
-                      <Eye size={18} strokeWidth={1.75} />
-                    )}
-                  </button>
-                }
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink transition-colors cursor-pointer"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <EyeOff size={18} strokeWidth={1.75} />
+                  ) : (
+                    <Eye size={18} strokeWidth={1.75} />
+                  )}
+                </button>
+              </div>
             </Field>
 
             <Button
@@ -121,7 +125,7 @@ export default function LoginPage() {
               loading={loading}
               className="mt-2"
             >
-              Sign in
+              Sign In
             </Button>
           </form>
 
@@ -151,5 +155,13 @@ export default function LoginPage() {
         </Card>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

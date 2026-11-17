@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { FileText, Download } from "lucide-react";
+import { FileText, Download, AlertCircle } from "lucide-react";
 import { api } from "@/lib/api";
 import { Assignment } from "@/lib/types";
 import { Navbar } from "@/components/Navbar";
@@ -19,7 +19,6 @@ import { useToast } from "@/components/ui/Toast";
 
 export default function RefereeAssignmentDetailPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
   const queryClient = useQueryClient();
   const toast = useToast();
 
@@ -59,7 +58,6 @@ export default function RefereeAssignmentDetailPage() {
       setIsRefuseOpen(false);
       queryClient.invalidateQueries({ queryKey: ["me-assignments"] });
       queryClient.invalidateQueries({ queryKey: ["me-stats"] });
-      router.push("/referee");
     },
     onError: (err: Error) => {
       toast.error(err.message || "Failed to refuse assignment");
@@ -111,14 +109,47 @@ export default function RefereeAssignmentDetailPage() {
     formattedDate = match?.date || "";
   }
 
+  const isCancelled = match?.status === "cancelled";
+
+  // Check 24 hours lock-out
+  let matchDateTime: Date | null = null;
+  if (match?.date) {
+    try {
+      const timeStr = match.time || "00:00";
+      const fullTime = timeStr.length === 5 ? `${timeStr}:00` : timeStr;
+      matchDateTime = new Date(`${match.date}T${fullTime}`);
+    } catch {
+      matchDateTime = null;
+    }
+  }
+
+  const now = new Date();
+  const isPast = matchDateTime ? matchDateTime.getTime() <= now.getTime() : false;
+  const isWithin24h = matchDateTime
+    ? matchDateTime.getTime() - now.getTime() < 24 * 3600 * 1000
+    : false;
+
   return (
     <>
       <Navbar title="Assignment" backHref="/referee" />
 
-      <main className="max-w-xl mx-auto w-full px-4 pt-4 flex flex-col gap-4 pb-24">
+      <main className="max-w-xl mx-auto w-full px-4 pt-4 flex flex-col gap-4 pb-28">
         {/* Header row */}
         <div className="flex items-center justify-between">
-          <StatusBadge status={assignment.status} />
+          <div className="flex items-center gap-2">
+            {isCancelled ? (
+              <span className="px-2.5 py-1 rounded-full text-[12px] font-semibold bg-gray-100 text-gray-600 border border-gray-200">
+                Cancelled
+              </span>
+            ) : (
+              <StatusBadge status={assignment.status} />
+            )}
+            {assignment.needs_attention && !isCancelled && (
+              <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-danger/10 text-danger border border-danger/20">
+                No answer
+              </span>
+            )}
+          </div>
           <span className="text-[13px] font-medium text-ink-muted">
             Match #{match?.match_number || "2026-88"}
           </span>
@@ -175,42 +206,50 @@ export default function RefereeAssignmentDetailPage() {
           </div>
         </Card>
 
-        {/* Receipt Section (Screen 05) */}
-        {assignment.status === "confirmed" && (
+        {/* Receipt Section */}
+        {assignment.status === "confirmed" && !isCancelled && (
           <Card className="flex flex-col gap-3 p-4">
             <div className="flex items-center gap-2">
               <FileText size={18} strokeWidth={1.75} className="text-brand" />
               <h3 className="text-[16px] font-semibold text-ink">Receipt</h3>
             </div>
-            <p className="text-[13px] text-ink-muted">
-              {assignment.receipt
-                ? `Receipt No. ${assignment.receipt.receipt_number}, issued ${assignment.receipt.issued_at}`
-                : "Receipt No. 2026-0148, issued 16 Nov 2026"}
-            </p>
-            <Button
-              variant="secondary"
-              size="md"
-              fullWidth
-              onClick={async () => {
-                try {
-                  toast.info("Downloading receipt PDF...");
-                  await api.downloadReceiptPdf(
-                    assignment.id,
-                    `recu_${assignment.receipt?.receipt_number || assignment.id}.pdf`
-                  );
-                } catch (err: unknown) {
-                  const msg = err instanceof Error ? err.message : "Failed to download receipt";
-                  toast.error(msg);
-                }
-              }}
-            >
-              <Download size={16} strokeWidth={1.75} className="mr-2" />
-              Download PDF
-            </Button>
+            {assignment.receipt ? (
+              <>
+                <p className="text-[13px] text-ink-muted">
+                  Receipt No. {assignment.receipt.receipt_number}, issued{" "}
+                  {assignment.receipt.issued_at}
+                </p>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  fullWidth
+                  onClick={async () => {
+                    try {
+                      toast.info("Downloading receipt PDF...");
+                      await api.downloadReceiptPdf(
+                        assignment.id,
+                        `recu_${assignment.receipt?.receipt_number || assignment.id}.pdf`
+                      );
+                    } catch (err: unknown) {
+                      const msg =
+                        err instanceof Error ? err.message : "Failed to download receipt";
+                      toast.error(msg);
+                    }
+                  }}
+                >
+                  <Download size={16} strokeWidth={1.75} className="mr-2" />
+                  Download PDF
+                </Button>
+              </>
+            ) : (
+              <p className="text-[13px] text-ink-muted">
+                Receipt will be generated by administration upon confirmation.
+              </p>
+            )}
           </Card>
         )}
 
-        {/* Refused message if refused */}
+        {/* Refused reason message if refused */}
         {assignment.status === "refused" && assignment.refusal_reason && (
           <div className="bg-[#FDECEC] border border-danger/20 rounded-[12px] p-4 text-[14px] text-danger">
             <span className="font-semibold">Reason for refusal: </span>
@@ -218,36 +257,72 @@ export default function RefereeAssignmentDetailPage() {
           </div>
         )}
 
-        {/* Action bar for pending state */}
-        {assignment.status === "pending" && (
+        {/* 24h Lock Notice if already answered and too close to the match */}
+        {!isCancelled && !isPast && isWithin24h && assignment.status !== "pending" && (
+          <div className="flex items-center gap-2 p-3 bg-gray-50 border border-gray-200 rounded-[12px] text-[13px] text-ink-muted">
+            <AlertCircle size={16} className="text-gray-400 shrink-0" />
+            <span>Too close to the match, contact the administration</span>
+          </div>
+        )}
+
+        {/* Action Bar (when not cancelled and not past) */}
+        {!isCancelled && !isPast && (
           <div className="fixed bottom-0 left-0 right-0 bg-surface border-t border-line p-4 flex items-center gap-3 z-30 max-w-xl mx-auto">
-            <Button
-              variant="secondary"
-              size="lg"
-              className="flex-1"
-              onClick={() => setIsRefuseOpen(true)}
-              disabled={confirmMutation.isPending}
-            >
-              Refuse
-            </Button>
-            <Button
-              variant="primary"
-              size="lg"
-              className="flex-1"
-              loading={confirmMutation.isPending}
-              onClick={() => confirmMutation.mutate(assignment.id)}
-            >
-              Confirm
-            </Button>
+            {assignment.status === "pending" && (
+              <>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  className="flex-1"
+                  onClick={() => setIsRefuseOpen(true)}
+                  disabled={confirmMutation.isPending}
+                >
+                  Refuse
+                </Button>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  className="flex-1"
+                  loading={confirmMutation.isPending}
+                  onClick={() => confirmMutation.mutate(assignment.id)}
+                >
+                  Confirm
+                </Button>
+              </>
+            )}
+
+            {assignment.status === "confirmed" && !isWithin24h && (
+              <Button
+                variant="secondary"
+                size="lg"
+                fullWidth
+                onClick={() => setIsRefuseOpen(true)}
+                className="text-danger border-danger/30 hover:bg-danger/10"
+              >
+                Change to Refused
+              </Button>
+            )}
+
+            {assignment.status === "refused" && !isWithin24h && (
+              <Button
+                variant="primary"
+                size="lg"
+                fullWidth
+                loading={confirmMutation.isPending}
+                onClick={() => confirmMutation.mutate(assignment.id)}
+              >
+                Change to Confirmed
+              </Button>
+            )}
           </div>
         )}
       </main>
 
-      {/* Refuse sheet (Screen 04) */}
+      {/* Refuse sheet */}
       <Modal
         isOpen={isRefuseOpen}
         onClose={() => setIsRefuseOpen(false)}
-        title="Refuse assignment"
+        title={assignment.status === "confirmed" ? "Change to Refused" : "Refuse assignment"}
         subtitle={
           match
             ? `${match.home_team.name} vs ${match.away_team.name}, ${formattedDate}`
@@ -278,7 +353,7 @@ export default function RefereeAssignmentDetailPage() {
                 })
               }
             >
-              Refuse assignment
+              Confirm refusal
             </Button>
             <Button
               variant="ghost"

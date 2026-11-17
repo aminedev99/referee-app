@@ -14,7 +14,9 @@ export interface User {
   email: string;
   name: string;
   role: Role;
+  is_active?: boolean;
   referee_id?: string;
+  phone?: string;
 }
 
 export interface Team {
@@ -31,6 +33,7 @@ export interface Referee {
   phone: string;
   license_number: string;
   category?: string; // e.g. "National Referee"
+  is_active?: boolean;
   matches_count: number;
   acceptance_rate: number;
   assigned_count?: number;
@@ -51,6 +54,8 @@ export interface Assignment {
   status: AssignmentStatus;
   refusal_reason?: string;
   receipt?: Receipt;
+  last_reminded_at?: string;
+  needs_attention?: boolean;
   created_at?: string;
 }
 
@@ -67,6 +72,7 @@ export interface Match {
   venue: string;
   division: MatchDivision;
   category: MatchCategory;
+  status: "scheduled" | "cancelled" | string;
   assignments: Assignment[];
 }
 
@@ -74,6 +80,7 @@ export interface Receipt {
   id: string;
   assignment_id: string;
   receipt_number: string; // e.g. "2026-0148"
+  number?: string; // YYYY-NNNN
   issued_at: string; // e.g. "2026-11-16"
   amount: number;
   pdf_url?: string;
@@ -136,11 +143,21 @@ export interface CreateMatchInput {
 }
 
 export interface CreateRefereeInput {
-  name: string;
+  name?: string;
+  full_name?: string;
   email: string;
   phone: string;
   license_number: string;
+  password?: string;
   temporary_password?: string;
+}
+
+export interface UpdateRefereeInput {
+  full_name?: string;
+  email?: string;
+  phone?: string;
+  license_number?: string;
+  is_active?: boolean;
 }
 
 export interface CreateTeamInput {

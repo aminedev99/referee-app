@@ -19,7 +19,8 @@ export default function AdminTeamsPage() {
   const queryClient = useQueryClient();
   const toast = useToast();
 
-  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [name, setName] = useState("");
   const [city, setCity] = useState("");
 
@@ -37,7 +38,7 @@ export default function AdminTeamsPage() {
     mutationFn: (input: CreateTeamInput) => api.createTeam(input),
     onSuccess: () => {
       toast.success("Team added successfully");
-      setIsAddOpen(false);
+      setIsSheetOpen(false);
       setName("");
       setCity("");
       queryClient.invalidateQueries({ queryKey: ["admin-teams"] });
@@ -47,14 +48,53 @@ export default function AdminTeamsPage() {
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: ({ id, input }: { id: string; input: Partial<CreateTeamInput> }) =>
+      api.updateTeam(id, input),
+    onSuccess: () => {
+      toast.success("Team updated successfully");
+      setIsSheetOpen(false);
+      setEditingTeam(null);
+      setName("");
+      setCity("");
+      queryClient.invalidateQueries({ queryKey: ["admin-teams"] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to update team");
+    },
+  });
+
+  const openCreate = () => {
+    setEditingTeam(null);
+    setName("");
+    setCity("");
+    setIsSheetOpen(true);
+  };
+
+  const openEdit = (team: Team) => {
+    setEditingTeam(team);
+    setName(team.name);
+    setCity(team.city);
+    setIsSheetOpen(true);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !city) {
+    if (!name.trim() || !city.trim()) {
       toast.error("Please fill in both name and city");
       return;
     }
-    createMutation.mutate({ name, city });
+    if (editingTeam) {
+      updateMutation.mutate({
+        id: editingTeam.id,
+        input: { name: name.trim(), city: city.trim() },
+      });
+    } else {
+      createMutation.mutate({ name: name.trim(), city: city.trim() });
+    }
   };
+
+  const isSaving = createMutation.isPending || updateMutation.isPending;
 
   return (
     <>
@@ -66,7 +106,7 @@ export default function AdminTeamsPage() {
           <Button
             variant="primary"
             size="md"
-            onClick={() => setIsAddOpen(true)}
+            onClick={openCreate}
           >
             <Plus size={16} strokeWidth={1.75} className="mr-1.5" />
             Add team
@@ -82,15 +122,15 @@ export default function AdminTeamsPage() {
           <EmptyState
             message="No teams found"
             actionLabel="Add team"
-            onAction={() => setIsAddOpen(true)}
+            onAction={openCreate}
           />
         ) : (
           <Card className="divide-y divide-line p-0 overflow-hidden">
             {teams.map((t) => (
               <div
                 key={t.id}
-                className="p-4 flex items-center justify-between hover:bg-canvas/50 transition-colors cursor-pointer"
-                onClick={() => toast.info(`Selected team ${t.name}`)}
+                className="p-4 flex items-center justify-between hover:bg-canvas/50 transition-colors cursor-pointer group"
+                onClick={() => openEdit(t)}
               >
                 <div>
                   <h4 className="text-[15px] font-semibold text-ink leading-tight">
@@ -98,7 +138,12 @@ export default function AdminTeamsPage() {
                   </h4>
                   <p className="text-[13px] text-ink-muted mt-0.5">{t.city}</p>
                 </div>
-                <ChevronRight size={18} strokeWidth={1.75} className="text-ink-muted" />
+                <div className="flex items-center gap-2 text-ink-muted">
+                  <span className="text-[12px] opacity-0 group-hover:opacity-100 transition-opacity text-brand">
+                    Edit
+                  </span>
+                  <ChevronRight size={18} strokeWidth={1.75} />
+                </div>
               </div>
             ))}
           </Card>
@@ -107,7 +152,7 @@ export default function AdminTeamsPage() {
         {/* Mobile FAB */}
         <button
           type="button"
-          onClick={() => setIsAddOpen(true)}
+          onClick={openCreate}
           className="md:hidden fixed bottom-20 right-5 z-30 w-14 h-14 rounded-full bg-brand text-surface flex items-center justify-center shadow-lg active:scale-95 transition-transform cursor-pointer"
           aria-label="Add team"
         >
@@ -115,12 +160,19 @@ export default function AdminTeamsPage() {
         </button>
       </main>
 
-      {/* Add Team Sheet */}
+      {/* Add / Edit Team Sheet */}
       <Modal
-        isOpen={isAddOpen}
-        onClose={() => setIsAddOpen(false)}
-        title="Add team"
-        subtitle="Register a new basketball club to the league"
+        isOpen={isSheetOpen}
+        onClose={() => {
+          setIsSheetOpen(false);
+          setEditingTeam(null);
+        }}
+        title={editingTeam ? "Edit team" : "Add team"}
+        subtitle={
+          editingTeam
+            ? "Update basketball club details"
+            : "Register a new basketball club to the league"
+        }
       >
         <form onSubmit={handleSubmit} className="flex flex-col gap-3.5 pt-1">
           <Field label="Club name" htmlFor="team-name" required>
@@ -148,10 +200,10 @@ export default function AdminTeamsPage() {
             variant="primary"
             size="lg"
             fullWidth
-            loading={createMutation.isPending}
+            loading={isSaving}
             className="mt-2"
           >
-            Create team
+            {editingTeam ? "Save changes" : "Create team"}
           </Button>
         </form>
       </Modal>

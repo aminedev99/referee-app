@@ -1,5 +1,5 @@
-from datetime import datetime
 import os
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload
@@ -9,7 +9,7 @@ from app.schemas import ReceiptOut
 from app.services.receipts import generate_receipt_pdf, get_amount_in_words_fr
 from app.services.notifications import notify
 
-router = APIRouter(prefix="/assignments", tags=["receipts"])
+router = APIRouter(prefix="/assignments", tags=["receipts"], dependencies=[Depends(get_current_user)])
 
 @router.post("/{id}/receipt", response_model=ReceiptOut, status_code=status.HTTP_201_CREATED)
 def create_receipt(
@@ -35,15 +35,26 @@ def create_receipt(
             detail="Assignment not found",
         )
 
-    # Idempotent: return existing receipt if already generated
+    # Idempotent: return existing receipt if already generated (regenerating fresh PDF with latest template)
     if assignment.receipt:
+        rcpt = assignment.receipt
+        pdf_path = generate_receipt_pdf(
+            receipt=rcpt,
+            assignment=assignment,
+            referee=assignment.referee,
+            match=assignment.match,
+            paying_team=assignment.paying_team,
+        )
+        rcpt.pdf_path = pdf_path
+        db.commit()
         return ReceiptOut(
-            id=assignment.receipt.id,
+            id=rcpt.id,
             assignment_id=assignment.id,
-            receipt_number=assignment.receipt.receipt_number,
-            issued_at=assignment.receipt.issued_at,
-            amount=assignment.receipt.amount,
-            amount_in_words=assignment.receipt.amount_in_words,
+            receipt_number=rcpt.receipt_number,
+            number=rcpt.number or rcpt.receipt_number,
+            issued_at=rcpt.issued_at,
+            amount=rcpt.amount,
+            amount_in_words=rcpt.amount_in_words,
             pdf_url=f"/api/assignments/{assignment.id}/receipt.pdf",
         )
 
@@ -54,14 +65,29 @@ def create_receipt(
         )
 
     now = datetime.now()
-    receipt_count = db.query(Receipt).count() + 1
-    receipt_num = f"{now.year}-{receipt_count:04d}"
+    year = now.year
+
+    # Sequential per year computed inside transaction
+    existing_receipts = db.query(Receipt.number).filter(Receipt.number.like(f"{year}-%")).all()
+    max_seq = 0
+    for (num_str,) in existing_receipts:
+        if num_str:
+            try:
+                seq = int(num_str.split("-")[1])
+                if seq > max_seq:
+                    max_seq = seq
+            except (IndexError, ValueError):
+                pass
+    next_seq = max_seq + 1
+    receipt_num = f"{year}-{next_seq:04d}"
+
     issued_date_str = now.strftime("%d %b %Y")
     amount_words = get_amount_in_words_fr(assignment.indemnity)
 
     receipt = Receipt(
         assignment_id=assignment.id,
         receipt_number=receipt_num,
+        number=receipt_num,
         issued_at=issued_date_str,
         amount=float(assignment.indemnity),
         amount_in_words=amount_words,
@@ -98,6 +124,7 @@ def create_receipt(
         id=receipt.id,
         assignment_id=receipt.assignment_id,
         receipt_number=receipt.receipt_number,
+        number=receipt.number,
         issued_at=receipt.issued_at,
         amount=receipt.amount,
         amount_in_words=receipt.amount_in_words,
@@ -140,6 +167,7 @@ def get_receipt(
         id=receipt.id,
         assignment_id=receipt.assignment_id,
         receipt_number=receipt.receipt_number,
+        number=receipt.number or receipt.receipt_number,
         issued_at=receipt.issued_at,
         amount=receipt.amount,
         amount_in_words=receipt.amount_in_words,
@@ -154,7 +182,13 @@ def get_receipt_pdf(
 ):
     assignment = (
         db.query(Assignment)
-        .options(joinedload(Assignment.receipt), joinedload(Assignment.referee))
+        .options(
+            joinedload(Assignment.receipt),
+            joinedload(Assignment.referee),
+            joinedload(Assignment.match).joinedload(Match.home_team),
+            joinedload(Assignment.match).joinedload(Match.away_team),
+            joinedload(Assignment.paying_team),
+        )
         .filter(Assignment.id == id)
         .first()
     )
@@ -172,11 +206,22 @@ def get_receipt_pdf(
             )
 
     receipt = assignment.receipt
-    if not receipt or not receipt.pdf_path or not os.path.exists(receipt.pdf_path):
+    if not receipt:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Receipt PDF not found",
         )
+
+    # Regenerate fresh PDF so latest design is always served
+    pdf_path = generate_receipt_pdf(
+        receipt=receipt,
+        assignment=assignment,
+        referee=assignment.referee,
+        match=assignment.match,
+        paying_team=assignment.paying_team,
+    )
+    receipt.pdf_path = pdf_path
+    db.commit()
 
     filename = f"recu_{receipt.receipt_number.replace('/', '_')}.pdf"
     return FileResponse(

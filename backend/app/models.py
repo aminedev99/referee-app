@@ -7,6 +7,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -25,6 +26,7 @@ class User(Base):
     name = Column(String(255), nullable=False)
     hashed_password = Column(String(255), nullable=False)
     role = Column(String(50), nullable=False, default="referee") # "admin" | "referee"
+    is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=get_utc_now)
 
     referee = relationship("Referee", back_populates="user", uselist=False, cascade="all, delete-orphan")
@@ -40,10 +42,20 @@ class Referee(Base):
     phone = Column(String(50), nullable=False)
     license_number = Column(String(50), nullable=False)
     category = Column(String(100), default="National Referee")
+    is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=get_utc_now)
 
     user = relationship("User", back_populates="referee")
     assignments = relationship("Assignment", back_populates="referee")
+
+    __table_args__ = (
+        Index(
+            "idx_referees_license_number_unique",
+            "license_number",
+            unique=True,
+            postgresql_where=(license_number.isnot(None)),
+        ),
+    )
 
 class Team(Base):
     __tablename__ = "teams"
@@ -66,6 +78,7 @@ class Match(Base):
     venue = Column(String(255), nullable=False)
     division = Column(String(50), nullable=False) # "1DV" | "2DV"
     category = Column(String(50), nullable=False) # "Men" | "Women"
+    status = Column(String(20), default="scheduled", nullable=False) # "scheduled" | "cancelled"
     created_by_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=get_utc_now)
 
@@ -84,6 +97,7 @@ class Assignment(Base):
     paying_team_id = Column(String(36), ForeignKey("teams.id"), nullable=False)
     status = Column(String(50), nullable=False, default="pending") # "pending" | "confirmed" | "refused"
     refusal_reason = Column(String(500), nullable=True)
+    last_reminded_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=get_utc_now)
 
     match = relationship("Match", back_populates="assignments")
@@ -97,6 +111,7 @@ class Receipt(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid)
     assignment_id = Column(String(36), ForeignKey("assignments.id", ondelete="CASCADE"), unique=True, nullable=False)
     receipt_number = Column(String(50), nullable=False)
+    number = Column(String(20), unique=True, nullable=True)
     issued_at = Column(String(50), nullable=False)
     amount = Column(Float, nullable=False)
     amount_in_words = Column(String(255), nullable=False)

@@ -4,7 +4,7 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { CreateMatchInput } from "@/lib/types";
+import { CreateMatchInput, Match } from "@/lib/types";
 import { Navbar } from "@/components/Navbar";
 import { MatchForm } from "@/components/MatchForm";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -22,18 +22,20 @@ export default function NewMatchPage() {
   });
 
   const { data: referees = [], isLoading: refsLoading, isError: refsError, refetch: refetchRefs } = useQuery({
-    queryKey: ["admin-referees"],
-    queryFn: () => api.getReferees(),
+    queryKey: ["admin-referees", "active"],
+    queryFn: () => api.getReferees(undefined, true),
   });
 
   const createMutation = useMutation({
     mutationFn: (data: CreateMatchInput) => api.createMatch(data),
-    onSuccess: () => {
-      toast.success("Match created and referees assigned successfully");
+    onSuccess: (createdMatch: Match, variables: CreateMatchInput) => {
+      const n = variables.assignments?.length || 0;
+      toast.success(`Match created, ${n} invitations sent`);
       queryClient.invalidateQueries({ queryKey: ["admin-matches"] });
       queryClient.invalidateQueries({ queryKey: ["admin-assignments"] });
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      router.push("/admin/matches");
+      queryClient.invalidateQueries({ queryKey: ["admin-referees"] });
+      router.push(`/admin/matches/${createdMatch.id}`);
     },
     onError: (err: Error) => {
       toast.error(err.message || "Failed to create match");
@@ -45,7 +47,7 @@ export default function NewMatchPage() {
 
   return (
     <>
-      <Navbar title="New match" backHref="/admin/matches" />
+      <Navbar title="New match" backHref="/admin/matches" hideBottomNav={true} />
 
       <main className="max-w-xl mx-auto w-full px-4 pt-4">
         {isLoading ? (

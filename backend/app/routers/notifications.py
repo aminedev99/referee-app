@@ -5,7 +5,7 @@ from app.deps import get_db, get_current_user
 from app.models import Notification, User
 from app.schemas import NotificationOut
 
-router = APIRouter(prefix="/notifications", tags=["notifications"])
+router = APIRouter(prefix="/notifications", tags=["notifications"], dependencies=[Depends(get_current_user)])
 
 @router.get("", response_model=List[NotificationOut])
 def get_notifications(

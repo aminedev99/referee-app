@@ -7,6 +7,7 @@ import { Search, Plus, Eye, EyeOff } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Referee, CreateRefereeInput } from "@/lib/types";
+import { formatPhone } from "@/lib/format";
 import { Navbar } from "@/components/Navbar";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
@@ -78,7 +79,7 @@ export default function AdminRefereesPage() {
     <>
       <Navbar title="Referees" />
 
-      <main className="max-w-4xl mx-auto w-full px-4 md:px-6 pt-4 flex flex-col gap-4">
+      <main className="max-w-4xl mx-auto w-full px-4 md:px-6 pt-4 flex flex-col gap-4 pb-20">
         {/* Desktop Header */}
         <div className="hidden md:flex items-center justify-between">
           <h2 className="text-[22px] font-bold text-ink">Referees</h2>
@@ -114,12 +115,15 @@ export default function AdminRefereesPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {referees.map((r) => {
-              const initials = r.name
+              const initials = (r.name || "")
                 .split(" ")
                 .map((n) => n[0])
+                .filter(Boolean)
                 .join("")
                 .slice(0, 2)
-                .toUpperCase();
+                .toUpperCase() || "RF";
+
+              const isInactive = r.is_active === false;
 
               return (
                 <Link key={r.id} href={`/admin/referees/${r.id}`}>
@@ -129,11 +133,18 @@ export default function AdminRefereesPage() {
                         {initials}
                       </div>
                       <div className="min-w-0">
-                        <h4 className="text-[15px] font-semibold text-ink truncate">
-                          {r.name}
-                        </h4>
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="text-[15px] font-semibold text-ink truncate">
+                            {r.name || "Not provided"}
+                          </h4>
+                          {isInactive && (
+                            <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-danger-tint text-danger border border-danger/20 shrink-0">
+                              Inactive
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[12px] text-ink-muted truncate">
-                          License {r.license_number} • {r.phone}
+                          License {r.license_number || "Not provided"} • {formatPhone(r.phone)}
                         </p>
                       </div>
                     </div>
@@ -164,7 +175,7 @@ export default function AdminRefereesPage() {
         </button>
       </main>
 
-      {/* Add Referee Sheet (Screen 14) */}
+      {/* Add Referee Sheet */}
       <Modal
         isOpen={isAddOpen}
         onClose={() => setIsAddOpen(false)}
@@ -196,6 +207,8 @@ export default function AdminRefereesPage() {
           <Field label="Phone" htmlFor="ref-phone" required>
             <Input
               id="ref-phone"
+              type="tel"
+              inputMode="tel"
               placeholder="06 63 45 67 89"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}

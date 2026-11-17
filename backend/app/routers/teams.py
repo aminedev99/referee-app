@@ -1,16 +1,16 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from app.deps import get_db, require_admin, get_current_user
+from app.deps import get_db, require_admin
 from app.models import Team, User
 from app.schemas import TeamOut, TeamCreate, TeamUpdate
 
-router = APIRouter(prefix="/teams", tags=["teams"])
+router = APIRouter(prefix="/teams", tags=["teams"], dependencies=[Depends(require_admin)])
 
 @router.get("", response_model=List[TeamOut])
 def get_teams(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ) -> List[TeamOut]:
     teams = db.query(Team).order_by(Team.name.asc()).all()
     return teams
@@ -21,13 +21,14 @@ def create_team(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ) -> TeamOut:
-    existing = db.query(Team).filter(Team.name.ilike(team_in.name.strip())).first()
+    name_clean = team_in.name.strip()
+    existing = db.query(Team).filter(Team.name.ilike(name_clean)).first()
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Team with name '{team_in.name}' already exists",
+            detail=f"Team with name '{name_clean}' already exists",
         )
-    team = Team(name=team_in.name.strip(), city=team_in.city.strip())
+    team = Team(name=name_clean, city=team_in.city.strip())
     db.add(team)
     db.commit()
     db.refresh(team)
@@ -48,13 +49,14 @@ def update_team(
         )
 
     if team_in.name and team_in.name.strip().lower() != team.name.lower():
-        existing = db.query(Team).filter(Team.name.ilike(team_in.name.strip())).first()
+        name_clean = team_in.name.strip()
+        existing = db.query(Team).filter(Team.name.ilike(name_clean)).first()
         if existing and existing.id != id:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Team with name '{team_in.name}' already exists",
+                detail=f"Team with name '{name_clean}' already exists",
             )
-        team.name = team_in.name.strip()
+        team.name = name_clean
 
     if team_in.city:
         team.city = team_in.city.strip()

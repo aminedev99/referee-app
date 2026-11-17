@@ -23,15 +23,22 @@ import { Modal } from "./ui/Modal";
 export interface NavbarProps {
   title?: string;
   backHref?: string;
+  hideBottomNav?: boolean;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ title, backHref }) => {
+export const Navbar: React.FC<NavbarProps> = ({ title, backHref, hideBottomNav }) => {
   const pathname = usePathname();
   const router = useRouter();
   const { role, logout } = useAuth();
   const [isMoreOpen, setIsMoreOpen] = useState(false);
 
   const isAdmin = role === "admin" || pathname.startsWith("/admin");
+
+  // Determine whether to suppress mobile bottom navigation
+  const isMatchFormRoute =
+    pathname === "/admin/matches/new" ||
+    (pathname.startsWith("/admin/matches/") && pathname.endsWith("/edit"));
+  const shouldHideBottomNav = hideBottomNav || isMatchFormRoute;
 
   const adminNavItems = [
     { label: "Matches", href: "/admin/matches", icon: Calendar },
@@ -177,6 +184,19 @@ export const Navbar: React.FC<NavbarProps> = ({ title, backHref }) => {
               <Users size={18} strokeWidth={1.75} />
               <span>Teams</span>
             </Link>
+
+            <Link
+              href="/admin/profile"
+              aria-current={pathname === "/admin/profile" ? "page" : undefined}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-[8px] text-[14px] font-medium transition-colors ${
+                pathname === "/admin/profile"
+                  ? "bg-brand text-surface"
+                  : "text-ink-muted hover:text-ink hover:bg-canvas"
+              }`}
+            >
+              <UserIcon size={18} strokeWidth={1.75} />
+              <span>Profile</span>
+            </Link>
           </div>
 
           {/* Footer Sign out */}
@@ -193,69 +213,71 @@ export const Navbar: React.FC<NavbarProps> = ({ title, backHref }) => {
         </aside>
       )}
 
-      {/* Fixed Bottom Tab Bar on Mobile (64px) */}
-      <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-surface border-t border-line flex items-center justify-around z-40"
-        aria-label="Mobile Bottom Navigation"
-      >
-        {isAdmin ? (
-          <>
-            {adminNavItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname.startsWith(item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-current={isActive ? "page" : undefined}
-                  className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-[11px] font-medium transition-colors ${
-                    isActive ? "text-brand" : "text-ink-muted hover:text-ink"
-                  }`}
-                >
-                  <Icon size={20} strokeWidth={1.75} />
-                  <span className="mt-1">{item.label}</span>
-                </Link>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => setIsMoreOpen(true)}
-              aria-expanded={isMoreOpen}
-              className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-[11px] font-medium cursor-pointer transition-colors ${
-                isMoreOpen ? "text-brand" : "text-ink-muted hover:text-ink"
-              }`}
-            >
-              <MoreHorizontal size={20} strokeWidth={1.75} />
-              <span className="mt-1">More</span>
-            </button>
-          </>
-        ) : (
-          <>
-            {refereeNavItems.map((item) => {
-              const Icon = item.icon;
-              const isActive =
-                item.href === "/referee"
-                  ? pathname === "/referee"
-                  : pathname.startsWith(item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-current={isActive ? "page" : undefined}
-                  className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-[11px] font-medium transition-colors ${
-                    isActive ? "text-brand" : "text-ink-muted hover:text-ink"
-                  }`}
-                >
-                  <Icon size={20} strokeWidth={1.75} />
-                  <span className="mt-1">{item.label}</span>
-                </Link>
-              );
-            })}
-          </>
-        )}
-      </nav>
+      {/* Fixed Bottom Tab Bar on Mobile (64px) - hidden on full-screen form routes */}
+      {!shouldHideBottomNav && (
+        <nav
+          className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-surface border-t border-line flex items-center justify-around z-40"
+          aria-label="Mobile Bottom Navigation"
+        >
+          {isAdmin ? (
+            <>
+              {adminNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    aria-current={isActive ? "page" : undefined}
+                    className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-[11px] font-medium transition-colors ${
+                      isActive ? "text-brand" : "text-ink-muted hover:text-ink"
+                    }`}
+                  >
+                    <Icon size={20} strokeWidth={1.75} />
+                    <span className="mt-1">{item.label}</span>
+                  </Link>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setIsMoreOpen(true)}
+                aria-expanded={isMoreOpen}
+                className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-[11px] font-medium cursor-pointer transition-colors ${
+                  isMoreOpen ? "text-brand" : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                <MoreHorizontal size={20} strokeWidth={1.75} />
+                <span className="mt-1">More</span>
+              </button>
+            </>
+          ) : (
+            <>
+              {refereeNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive =
+                  item.href === "/referee"
+                    ? pathname === "/referee"
+                    : pathname.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    aria-current={isActive ? "page" : undefined}
+                    className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-[11px] font-medium transition-colors ${
+                      isActive ? "text-brand" : "text-ink-muted hover:text-ink"
+                    }`}
+                  >
+                    <Icon size={20} strokeWidth={1.75} />
+                    <span className="mt-1">{item.label}</span>
+                  </Link>
+                );
+              })}
+            </>
+          )}
+        </nav>
+      )}
 
-      {/* Admin "More" Mobile Sheet (Screen 18) */}
+      {/* Admin "More" Mobile Sheet */}
       {isAdmin && (
         <Modal
           isOpen={isMoreOpen}
@@ -283,6 +305,18 @@ export const Navbar: React.FC<NavbarProps> = ({ title, backHref }) => {
               <div className="flex items-center gap-3">
                 <Layers size={20} strokeWidth={1.75} className="text-ink-muted" />
                 <span className="text-[15px] font-medium">Dashboard</span>
+              </div>
+              <ChevronRight size={18} strokeWidth={1.75} className="text-ink-muted" />
+            </Link>
+
+            <Link
+              href="/admin/profile"
+              onClick={() => setIsMoreOpen(false)}
+              className="py-3.5 flex items-center justify-between text-ink hover:text-brand transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <UserIcon size={20} strokeWidth={1.75} className="text-ink-muted" />
+                <span className="text-[15px] font-medium">Profile</span>
               </div>
               <ChevronRight size={18} strokeWidth={1.75} className="text-ink-muted" />
             </Link>

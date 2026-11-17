@@ -1,21 +1,149 @@
-from datetime import date as dt_date
+from datetime import datetime, date as dt_date, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
-from app.deps import get_db, require_admin, get_current_user
-from app.models import Match, Assignment, Team, Referee, User
-from app.schemas import MatchOut, MatchCreate, MatchUpdate
+from app.deps import get_db, require_admin
+from app.models import Match, Assignment, Team, Referee, User, Receipt
+from app.schemas import MatchOut, MatchCreate, MatchUpdate, AssignmentOut, MatchSummaryOut, RefereeSummaryOut, TeamOut, ReceiptOut
 from app.services.notifications import notify
 
-router = APIRouter(prefix="/matches", tags=["matches"])
+router = APIRouter(prefix="/matches", tags=["matches"], dependencies=[Depends(require_admin)])
+
+def is_needs_attention(match_date: str, match_time: str, asg_status: str, match_status: str = "scheduled") -> bool:
+    if asg_status != "pending" or match_status == "cancelled":
+        return False
+    try:
+        match_dt = datetime.strptime(f"{match_date} {match_time}", "%Y-%m-%d %H:%M")
+        now = datetime.now()
+        diff = (match_dt - now).total_seconds()
+        return 0 <= diff <= 24 * 3600
+    except Exception:
+        return False
+
+def build_assignment_out(a: Assignment, m: Match) -> AssignmentOut:
+    needs_attn = is_needs_attention(m.date, m.time, a.status, getattr(m, "status", "scheduled"))
+    receipt_out = None
+    if a.receipt:
+        receipt_out = ReceiptOut(
+            id=a.receipt.id,
+            assignment_id=a.id,
+            receipt_number=a.receipt.receipt_number,
+            number=a.receipt.number or a.receipt.receipt_number,
+            issued_at=a.receipt.issued_at,
+            amount=a.receipt.amount,
+            amount_in_words=a.receipt.amount_in_words,
+            pdf_url=f"/api/assignments/{a.id}/receipt.pdf",
+        )
+
+    ref_out = None
+    if a.referee:
+        ref_out = RefereeSummaryOut(
+            id=a.referee.id,
+            user_id=a.referee.user_id,
+            name=a.referee.name,
+            email=a.referee.email,
+            phone=a.referee.phone,
+            license_number=a.referee.license_number,
+            category=a.referee.category,
+            is_active=a.referee.is_active,
+        )
+
+    paying_out = None
+    if a.paying_team:
+        paying_out = TeamOut(
+            id=a.paying_team.id,
+            name=a.paying_team.name,
+            city=a.paying_team.city,
+        )
+
+    return AssignmentOut(
+        id=a.id,
+        match_id=a.match_id,
+        referee_id=a.referee_id,
+        referee=ref_out,
+        referee_function=a.referee_function,
+        indemnity=a.indemnity,
+        paying_team_id=a.paying_team_id,
+        paying_team=paying_out,
+        status=a.status,
+        refusal_reason=a.refusal_reason,
+        receipt=receipt_out,
+        last_reminded_at=a.last_reminded_at,
+        needs_attention=needs_attn,
+        created_at=a.created_at,
+    )
+
+def build_match_out(m: Match) -> MatchOut:
+    asgs = m.assignments or []
+    asgs_out = [build_assignment_out(a, m) for a in asgs]
+
+    return MatchOut(
+        id=m.id,
+        match_number=m.match_number,
+        home_team_id=m.home_team_id,
+        away_team_id=m.away_team_id,
+        home_team=TeamOut(id=m.home_team.id, name=m.home_team.name, city=m.home_team.city),
+        away_team=TeamOut(id=m.away_team.id, name=m.away_team.name, city=m.away_team.city),
+        date=m.date,
+        time=m.time,
+        city=m.city,
+        venue=m.venue,
+        division=m.division,
+        category=m.category,
+        status=m.status,
+        assignments=asgs_out,
+        assignments_count=len(asgs),
+        confirmed_count=sum(1 for a in asgs if a.status == "confirmed"),
+        pending_count=sum(1 for a in asgs if a.status == "pending"),
+        refused_count=sum(1 for a in asgs if a.status == "refused"),
+    )
+
+def check_referee_conflicts(
+    db: Session,
+    referee_id: str,
+    target_date: str,
+    target_time: str,
+    exclude_match_id: Optional[str] = None,
+) -> None:
+    target_dt = datetime.strptime(f"{target_date} {target_time}", "%Y-%m-%d %H:%M")
+
+    query = (
+        db.query(Assignment)
+        .join(Match)
+        .options(joinedload(Assignment.match).joinedload(Match.home_team), joinedload(Assignment.match).joinedload(Match.away_team), joinedload(Assignment.referee))
+        .filter(
+            Assignment.referee_id == referee_id,
+            Match.status != "cancelled",
+        )
+    )
+    if exclude_match_id:
+        query = query.filter(Assignment.match_id != exclude_match_id)
+
+    other_asgs = query.all()
+    for o in other_asgs:
+        m = o.match
+        if not m:
+            continue
+        try:
+            other_dt = datetime.strptime(f"{m.date} {m.time}", "%Y-%m-%d %H:%M")
+        except Exception:
+            continue
+
+        diff_seconds = abs((target_dt - other_dt).total_seconds())
+        if diff_seconds <= 3 * 3600:
+            ref_name = o.referee.name if o.referee else "Referee"
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"{ref_name} is already assigned to {m.home_team.name} vs {m.away_team.name} at {m.time}",
+            )
 
 @router.get("", response_model=List[MatchOut])
 def get_matches(
-    scope: Optional[str] = Query("all"), # all | upcoming | past
+    scope: Optional[str] = Query("all"), # all | upcoming | past | cancelled
     q: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ) -> List[MatchOut]:
     query = (
         db.query(Match)
@@ -27,6 +155,11 @@ def get_matches(
             joinedload(Match.assignments).joinedload(Assignment.receipt),
         )
     )
+
+    if scope == "cancelled":
+        query = query.filter(Match.status == "cancelled")
+    else:
+        query = query.filter(Match.status != "cancelled")
 
     if q and q.strip():
         search = f"%{q.strip()}%"
@@ -47,38 +180,13 @@ def get_matches(
         query = query.order_by(Match.date.desc(), Match.time.desc())
 
     matches = query.all()
-
-    results: List[MatchOut] = []
-    for m in matches:
-        asgs = m.assignments or []
-        m_out = MatchOut(
-            id=m.id,
-            match_number=m.match_number,
-            home_team_id=m.home_team_id,
-            away_team_id=m.away_team_id,
-            home_team=m.home_team,
-            away_team=m.away_team,
-            date=m.date,
-            time=m.time,
-            city=m.city,
-            venue=m.venue,
-            division=m.division,
-            category=m.category,
-            assignments=asgs,
-            assignments_count=len(asgs),
-            confirmed_count=sum(1 for a in asgs if a.status == "confirmed"),
-            pending_count=sum(1 for a in asgs if a.status == "pending"),
-            refused_count=sum(1 for a in asgs if a.status == "refused"),
-        )
-        results.append(m_out)
-
-    return results
+    return [build_match_out(m) for m in matches]
 
 @router.get("/{id}", response_model=MatchOut)
 def get_match(
     id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ) -> MatchOut:
     match = (
         db.query(Match)
@@ -98,26 +206,7 @@ def get_match(
             detail="Match not found",
         )
 
-    asgs = match.assignments or []
-    return MatchOut(
-        id=match.id,
-        match_number=match.match_number,
-        home_team_id=match.home_team_id,
-        away_team_id=match.away_team_id,
-        home_team=match.home_team,
-        away_team=match.away_team,
-        date=match.date,
-        time=match.time,
-        city=match.city,
-        venue=match.venue,
-        division=match.division,
-        category=match.category,
-        assignments=asgs,
-        assignments_count=len(asgs),
-        confirmed_count=sum(1 for a in asgs if a.status == "confirmed"),
-        pending_count=sum(1 for a in asgs if a.status == "pending"),
-        refused_count=sum(1 for a in asgs if a.status == "refused"),
-    )
+    return build_match_out(match)
 
 @router.post("", response_model=MatchOut, status_code=status.HTTP_201_CREATED)
 def create_match(
@@ -152,27 +241,29 @@ def create_match(
             detail="Invalid home or away team ID",
         )
 
-    match_date = match_in.date or match_in.match_date or dt_date.today().isoformat()
-    match_number = f"2026-{db.query(Match).count() + 10:02d}"
+    match_date = match_in.date or match_in.match_date
+    if not match_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Match date is required",
+        )
+    match_time = match_in.time or "18:30"
 
-    match = Match(
-        match_number=match_number,
-        home_team_id=match_in.home_team_id,
-        away_team_id=match_in.away_team_id,
-        date=match_date,
-        time=match_in.time or "18:30",
-        city=match_in.city.strip(),
-        venue=match_in.venue.strip(),
-        division=match_in.division,
-        category=match_in.category,
-        created_by_id=current_user.id,
-    )
-    db.add(match)
-    db.flush()
+    try:
+        target_dt = datetime.strptime(f"{match_date} {match_time}", "%Y-%m-%d %H:%M")
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid match date or time format",
+        )
 
-    assignments_to_create: List[Assignment] = []
-    notify_user_ids: List[str] = []
+    if target_dt <= datetime.now():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Match date must be in the future",
+        )
 
+    # Validate active referees and run conflict checks
     for asg_in in match_in.assignments:
         if asg_in.indemnity <= 0:
             raise HTTPException(
@@ -191,27 +282,52 @@ def create_match(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Referee '{asg_in.referee_id}' does not exist",
             )
+        if not ref.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Referee '{ref.name}' is inactive and cannot be assigned",
+            )
 
+        check_referee_conflicts(db, ref.id, match_date, match_time)
+
+    match_number = f"2026-{db.query(Match).count() + 10:02d}"
+
+    match = Match(
+        match_number=match_number,
+        home_team_id=match_in.home_team_id,
+        away_team_id=match_in.away_team_id,
+        date=match_date,
+        time=match_time,
+        city=match_in.city.strip(),
+        venue=match_in.venue.strip(),
+        division=match_in.division,
+        category=match_in.category,
+        status="scheduled",
+        created_by_id=current_user.id,
+    )
+    db.add(match)
+    db.flush()
+
+    notify_user_ids: List[str] = []
+    for asg_in in match_in.assignments:
+        ref = db.query(Referee).filter(Referee.id == asg_in.referee_id).first()
         assignment = Assignment(
             match_id=match.id,
-            referee_id=ref.id,
+            referee_id=asg_in.referee_id,
             referee_function=asg_in.referee_function,
             indemnity=float(asg_in.indemnity),
             paying_team_id=asg_in.paying_team_id,
             status="pending",
         )
         db.add(assignment)
-        assignments_to_create.append(assignment)
-
-        if ref.user_id:
+        if ref and ref.user_id:
             notify_user_ids.append(ref.user_id)
 
-    # Send notification to each referee
+    # One notification per referee
     notif_msg = f"New assignment: {home_team.name} vs {away_team.name}, {match_date}"
     notify(db, notify_user_ids, notif_msg, type="assignment", title="New assignment")
 
     db.commit()
-
     return get_match(match.id, db=db, current_user=current_user)
 
 @router.put("/{id}", response_model=MatchOut)
@@ -228,6 +344,23 @@ def update_match(
             detail="Match not found",
         )
 
+    if match.status == "cancelled":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot edit a cancelled match",
+        )
+
+    # Past match check
+    try:
+        match_dt = datetime.strptime(f"{match.date} {match.time}", "%Y-%m-%d %H:%M")
+        if match_dt < datetime.now():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot edit past matches",
+            )
+    except ValueError:
+        pass
+
     home_id = match_in.home_team_id or match.home_team_id
     away_id = match_in.away_team_id or match.away_team_id
     if home_id == away_id:
@@ -236,18 +369,22 @@ def update_match(
             detail="Away team must differ from home team",
         )
 
-    date_changed = False
-    new_date = match_in.date or match_in.match_date
-    if new_date and new_date != match.date:
-        match.date = new_date
-        date_changed = True
+    # Detect venue, date, city changes
+    new_date = match_in.date or match_in.match_date or match.date
+    new_time = match_in.time or match.time
+    new_venue = match_in.venue or match.venue
+    new_city = match_in.city or match.city
 
-    if match_in.time:
-        match.time = match_in.time
-    if match_in.city:
-        match.city = match_in.city
-    if match_in.venue:
-        match.venue = match_in.venue
+    date_or_place_changed = (
+        new_date != match.date or
+        new_venue != match.venue or
+        new_city != match.city
+    )
+
+    match.date = new_date
+    match.time = new_time
+    match.venue = new_venue
+    match.city = new_city
     if match_in.division:
         match.division = match_in.division
     if match_in.category:
@@ -257,7 +394,26 @@ def update_match(
     if match_in.away_team_id:
         match.away_team_id = match_in.away_team_id
 
-    # If assignments are provided, sync them
+    # If date or place changed, reset every confirmed/refused assignment to pending and notify
+    if date_or_place_changed:
+        existing_asgs = db.query(Assignment).filter(Assignment.match_id == id).all()
+        referees_to_renotify = []
+        for asg in existing_asgs:
+            if asg.status in ("confirmed", "refused"):
+                asg.status = "pending"
+                asg.refusal_reason = None
+                if asg.referee and asg.referee.user_id:
+                    referees_to_renotify.append(asg.referee.user_id)
+        if referees_to_renotify:
+            notify(
+                db,
+                referees_to_renotify,
+                "Match updated, please confirm again",
+                type="assignment",
+                title="Match updated, please confirm again",
+            )
+
+    # Sync assignments if provided
     if match_in.assignments is not None:
         new_ref_ids = [a.referee_id for a in match_in.assignments]
         if len(new_ref_ids) != len(set(new_ref_ids)):
@@ -266,10 +422,11 @@ def update_match(
                 detail="Duplicate referee in assignments is not allowed",
             )
 
-        existing_asgs = db.query(Assignment).filter(Assignment.match_id == id).all()
+        existing_asgs = db.query(Assignment).options(joinedload(Assignment.receipt), joinedload(Assignment.referee)).filter(Assignment.match_id == id).all()
         existing_by_ref = {a.referee_id: a for a in existing_asgs}
 
-        # Check if removing an assignment that has a receipt
+        # Removing a referee: delete assignment and notify "Assignment cancelled: {home} vs {away}".
+        # Blocked with 409 if it has a receipt.
         for existing in existing_asgs:
             if existing.referee_id not in new_ref_ids:
                 if existing.receipt is not None:
@@ -277,9 +434,17 @@ def update_match(
                         status_code=status.HTTP_409_CONFLICT,
                         detail="Cannot remove assignment that already has an issued receipt",
                     )
+                if existing.referee and existing.referee.user_id:
+                    notify(
+                        db,
+                        existing.referee.user_id,
+                        f"Assignment cancelled: {match.home_team.name} vs {match.away_team.name}",
+                        type="assignment",
+                        title=f"Assignment cancelled: {match.home_team.name} vs {match.away_team.name}",
+                    )
                 db.delete(existing)
 
-        # Add or update
+        # Add or update assignments
         for asg_in in match_in.assignments:
             if asg_in.indemnity <= 0:
                 raise HTTPException(
@@ -294,8 +459,27 @@ def update_match(
 
             if asg_in.referee_id in existing_by_ref:
                 existing = existing_by_ref[asg_in.referee_id]
-                existing.referee_function = asg_in.referee_function
-                existing.indemnity = float(asg_in.indemnity)
+                changed_fn = existing.referee_function != asg_in.referee_function
+                changed_ind = float(existing.indemnity) != float(asg_in.indemnity)
+                if changed_fn or changed_ind:
+                    # Changing an indemnity or function resets that assignment to pending and notifies. Blocked with 409 if receipt exists.
+                    if existing.receipt is not None:
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail="Cannot change function or indemnity for an assignment with an issued receipt",
+                        )
+                    existing.referee_function = asg_in.referee_function
+                    existing.indemnity = float(asg_in.indemnity)
+                    existing.status = "pending"
+                    existing.refusal_reason = None
+                    if existing.referee and existing.referee.user_id:
+                        notify(
+                            db,
+                            existing.referee.user_id,
+                            f"Assignment updated: {match.home_team.name} vs {match.away_team.name}, please confirm again",
+                            type="assignment",
+                            title="Assignment updated",
+                        )
                 existing.paying_team_id = asg_in.paying_team_id
             else:
                 ref = db.query(Referee).filter(Referee.id == asg_in.referee_id).first()
@@ -304,6 +488,13 @@ def update_match(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"Referee '{asg_in.referee_id}' does not exist",
                     )
+                if not ref.is_active:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Referee '{ref.name}' is inactive and cannot be assigned",
+                    )
+                check_referee_conflicts(db, ref.id, match.date, match.time, exclude_match_id=id)
+
                 new_asg = Assignment(
                     match_id=id,
                     referee_id=ref.id,
@@ -319,7 +510,35 @@ def update_match(
                         ref.user_id,
                         f"New assignment: {match.home_team.name} vs {match.away_team.name}, {match.date}",
                         type="assignment",
+                        title="New assignment",
                     )
 
     db.commit()
     return get_match(match.id, db=db, current_user=current_user)
+
+@router.post("/{id}/cancel")
+def cancel_match(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    match = db.query(Match).options(joinedload(Match.assignments).joinedload(Assignment.referee), joinedload(Match.home_team), joinedload(Match.away_team)).filter(Match.id == id).first()
+    if not match:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Match not found",
+        )
+
+    match.status = "cancelled"
+
+    ref_user_ids = [
+        a.referee.user_id
+        for a in (match.assignments or [])
+        if a.referee and a.referee.user_id
+    ]
+
+    notif_msg = f"Match cancelled: {match.home_team.name} vs {match.away_team.name}"
+    notify(db, ref_user_ids, notif_msg, type="assignment", title="Match cancelled")
+
+    db.commit()
+    return {"status": "ok", "message": "Match cancelled"}

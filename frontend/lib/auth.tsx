@@ -2,15 +2,17 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Role, User } from "./types";
-import { api, clearStoredToken, getStoredToken } from "./api";
+import { api, clearStoredToken, getStoredToken, setOnUnauthorizedCallback } from "./api";
 
 interface AuthContextType {
   user: User | null;
   role: Role | null;
   loading: boolean;
-  login: (formData: FormData | URLSearchParams) => Promise<void>;
+  login: (formData: FormData | URLSearchParams, nextPath?: string | null) => Promise<void>;
   logout: () => void;
+  refetchUser: () => Promise<User | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -23,39 +25,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return !!getStoredToken();
   });
   const router = useRouter();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    setOnUnauthorizedCallback(() => {
+      queryClient.clear();
+      setUser(null);
+      setRole(null);
+    });
+  }, [queryClient]);
+
+  const refetchUser = async (): Promise<User | null> => {
+    try {
+      const u = await api.getMe();
+      setUser(u);
+      setRole(u.role);
+      return u;
+    } catch {
+      clearStoredToken();
+      queryClient.clear();
+      setUser(null);
+      setRole(null);
+      return null;
+    }
+  };
 
   useEffect(() => {
     const token = getStoredToken();
-    if (!token) {
-      return;
-    }
-
-    api
-      .getMe()
-      .then((u) => {
-        setUser(u);
-        setRole(u.role);
-      })
-      .catch(() => {
-        clearStoredToken();
-        setUser(null);
-        setRole(null);
-      })
-      .finally(() => {
+    if (token) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      refetchUser().finally(() => {
         setLoading(false);
       });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const login = async (formData: FormData | URLSearchParams) => {
+  const login = async (formData: FormData | URLSearchParams, nextPath?: string | null) => {
     setLoading(true);
     try {
       const res = await api.login(formData);
       setUser(res.user);
       setRole(res.role);
+
+      // Check nextPath if valid and allowed for this role
+      if (nextPath && nextPath.startsWith("/")) {
+        if (res.role === "admin" && !nextPath.startsWith("/referee")) {
+          router.replace(nextPath);
+          return;
+        }
+        if (res.role === "referee" && !nextPath.startsWith("/admin")) {
+          router.replace(nextPath);
+          return;
+        }
+      }
+
       if (res.role === "admin") {
-        router.push("/admin");
+        router.replace("/admin");
       } else {
-        router.push("/referee");
+        router.replace("/referee");
       }
     } finally {
       setLoading(false);
@@ -64,13 +92,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     clearStoredToken();
+    queryClient.clear();
     setUser(null);
     setRole(null);
-    router.push("/login");
+    router.replace("/login");
   };
 
   return (
-    <AuthContext.Provider value={{ user, role, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, role, loading, login, logout, refetchUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -30,6 +30,7 @@ export const AssignmentCard: React.FC<AssignmentCardProps> = ({
   isRefusing = false,
 }) => {
   const match = assignment.match;
+  const isCancelled = match?.status === "cancelled";
 
   // Format date
   let formattedDate = "";
@@ -74,7 +75,20 @@ export const AssignmentCard: React.FC<AssignmentCardProps> = ({
               </p>
             </div>
           </div>
-          <StatusBadge status={assignment.status} />
+          <div className="flex items-center gap-1.5">
+            {isCancelled ? (
+              <span className="px-2 py-0.5 rounded-full text-[12px] font-semibold bg-gray-100 text-gray-600 border border-gray-200">
+                Cancelled
+              </span>
+            ) : (
+              <StatusBadge status={assignment.status} />
+            )}
+            {assignment.needs_attention && (
+              <span className="px-1.5 py-0.5 rounded text-[11px] font-bold bg-danger/10 text-danger border border-danger/20">
+                No answer
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex items-baseline justify-between pt-1">
@@ -97,7 +111,7 @@ export const AssignmentCard: React.FC<AssignmentCardProps> = ({
           </div>
         )}
 
-        {assignment.status === "confirmed" && (
+        {!isCancelled && assignment.status === "confirmed" && (
           <div className="flex items-center gap-2 pt-2 border-t border-line">
             {!assignment.receipt ? (
               <Button
@@ -133,7 +147,15 @@ export const AssignmentCard: React.FC<AssignmentCardProps> = ({
         <span className="text-[12px] font-medium text-ink-muted">
           {formattedDate}
         </span>
-        <StatusBadge status={assignment.status} />
+        <div className="flex items-center gap-1.5">
+          {isCancelled ? (
+            <span className="px-2 py-0.5 rounded-full text-[12px] font-semibold bg-gray-100 text-gray-600 border border-gray-200">
+              Cancelled
+            </span>
+          ) : (
+            <StatusBadge status={assignment.status} />
+          )}
+        </div>
       </div>
 
       <Link
@@ -169,7 +191,7 @@ export const AssignmentCard: React.FC<AssignmentCardProps> = ({
         </span>
       </div>
 
-      {assignment.status === "pending" && (
+      {!isCancelled && assignment.status === "pending" && (
         <div className="flex items-center gap-2.5 pt-1">
           <Button
             variant="secondary"

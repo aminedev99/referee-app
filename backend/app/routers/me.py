@@ -1,4 +1,4 @@
-from datetime import date as dt_date
+from datetime import datetime, date as dt_date
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
@@ -7,8 +7,9 @@ from app.models import Assignment, Referee, Match, User
 from app.schemas import AssignmentOut, RefuseInput, RefereeStatsOut, RefereeOut
 from app.services.notifications import notify
 from app.services.stats import get_referee_stats
+from app.routers.matches import build_assignment_out
 
-router = APIRouter(prefix="/me", tags=["me"])
+router = APIRouter(prefix="/me", tags=["me"], dependencies=[Depends(require_referee)])
 
 def _get_current_referee(user: User, db: Session) -> Referee:
     referee = db.query(Referee).filter(Referee.user_id == user.id).first()
@@ -53,7 +54,7 @@ def get_my_assignments(
         )
 
     assignments = query.order_by(Assignment.created_at.desc()).all()
-    return assignments
+    return [build_assignment_out(a, a.match) for a in assignments if a.match]
 
 @router.get("/assignments/{id}", response_model=AssignmentOut)
 def get_my_assignment(
@@ -83,7 +84,7 @@ def get_my_assignment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Assignment not found",
         )
-    return assignment
+    return build_assignment_out(assignment, assignment.match)
 
 @router.post("/assignments/{id}/confirm", response_model=AssignmentOut)
 def confirm_my_assignment(
@@ -114,11 +115,47 @@ def confirm_my_assignment(
             detail="Assignment not found",
         )
 
-    if assignment.status != "pending":
+    match = assignment.match
+    if not match:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Associated match not found",
+        )
+
+    # Cancelled matches cannot be answered
+    if match.status == "cancelled":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot confirm assignment with status '{assignment.status}'",
+            detail="Cannot answer an assignment for a cancelled match",
         )
+
+    # Check match datetime
+    try:
+        match_dt = datetime.strptime(f"{match.date} {match.time}", "%Y-%m-%d %H:%M")
+        now = datetime.now()
+        time_until_match = (match_dt - now).total_seconds()
+        if time_until_match <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot answer an assignment for a past match",
+            )
+    except ValueError:
+        time_until_match = 86400 * 10
+
+    # Same status requested again returns 409
+    if assignment.status == "confirmed":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Assignment is already confirmed",
+        )
+
+    # If transitioning from refused -> confirmed, allowed only until 24h before match
+    if assignment.status == "refused":
+        if time_until_match < 24 * 3600:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Too close to the match, contact the administration",
+            )
 
     assignment.status = "confirmed"
     assignment.refusal_reason = None
@@ -126,14 +163,13 @@ def confirm_my_assignment(
     # Notify all admins
     admins = db.query(User).filter(User.role == "admin").all()
     admin_ids = [a.id for a in admins]
-    match = assignment.match
-    match_str = f"{match.home_team.name} vs {match.away_team.name}" if match else "Match"
+    match_str = f"{match.home_team.name} vs {match.away_team.name}"
     notif_msg = f"{referee.name} confirmed {match_str}"
     notify(db, admin_ids, notif_msg, type="confirmation", title=f"{referee.name} confirmed")
 
     db.commit()
     db.refresh(assignment)
-    return assignment
+    return build_assignment_out(assignment, match)
 
 @router.post("/assignments/{id}/refuse", response_model=AssignmentOut)
 def refuse_my_assignment(
@@ -165,11 +201,47 @@ def refuse_my_assignment(
             detail="Assignment not found",
         )
 
-    if assignment.status != "pending":
+    match = assignment.match
+    if not match:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Associated match not found",
+        )
+
+    # Cancelled matches cannot be answered
+    if match.status == "cancelled":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot refuse assignment with status '{assignment.status}'",
+            detail="Cannot answer an assignment for a cancelled match",
         )
+
+    # Check match datetime
+    try:
+        match_dt = datetime.strptime(f"{match.date} {match.time}", "%Y-%m-%d %H:%M")
+        now = datetime.now()
+        time_until_match = (match_dt - now).total_seconds()
+        if time_until_match <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot answer an assignment for a past match",
+            )
+    except ValueError:
+        time_until_match = 86400 * 10
+
+    # Same status requested again returns 409
+    if assignment.status == "refused":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Assignment is already refused",
+        )
+
+    # If transitioning from confirmed -> refused, allowed only until 24h before match
+    if assignment.status == "confirmed":
+        if time_until_match < 24 * 3600:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Too close to the match, contact the administration",
+            )
 
     reason = refuse_in.reason if refuse_in and refuse_in.reason else "Unavailable"
     assignment.status = "refused"
@@ -178,14 +250,13 @@ def refuse_my_assignment(
     # Notify all admins
     admins = db.query(User).filter(User.role == "admin").all()
     admin_ids = [a.id for a in admins]
-    match = assignment.match
-    match_str = f"{match.home_team.name} vs {match.away_team.name}" if match else "Match"
+    match_str = f"{match.home_team.name} vs {match.away_team.name}"
     notif_msg = f"{referee.name} refused {match_str}"
     notify(db, admin_ids, notif_msg, type="refusal", title=f"{referee.name} refused")
 
     db.commit()
     db.refresh(assignment)
-    return assignment
+    return build_assignment_out(assignment, match)
 
 @router.get("/stats", response_model=RefereeStatsOut)
 def get_my_stats(
@@ -211,6 +282,7 @@ def get_my_profile(
         phone=referee.phone,
         license_number=referee.license_number,
         category=referee.category or "National Referee",
+        is_active=referee.is_active,
         matches_count=stats["total_assigned"],
         assigned_count=stats["total_assigned"],
         confirmed_count=stats["confirmed"],

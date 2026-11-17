@@ -41,6 +41,7 @@ export const AssignmentTable: React.FC<AssignmentTableProps> = ({
                 .slice(0, 2)
                 .toUpperCase();
               const match = asg.match;
+              const isCancelled = match?.status === "cancelled";
 
               return (
                 <tr key={asg.id} className="hover:bg-canvas/40 transition-colors">
@@ -67,7 +68,20 @@ export const AssignmentTable: React.FC<AssignmentTableProps> = ({
                     {asg.indemnity} MAD
                   </td>
                   <td className="py-3 px-4 whitespace-nowrap">
-                    <StatusBadge status={asg.status} />
+                    <div className="flex items-center gap-1.5">
+                      {isCancelled ? (
+                        <span className="px-2 py-0.5 rounded-full text-[12px] font-semibold bg-gray-100 text-gray-600 border border-gray-200">
+                          Cancelled
+                        </span>
+                      ) : (
+                        <StatusBadge status={asg.status} />
+                      )}
+                      {asg.needs_attention && (
+                        <span className="px-1.5 py-0.5 rounded text-[11px] font-bold bg-danger/10 text-danger border border-danger/20">
+                          No answer
+                        </span>
+                      )}
+                    </div>
                     {asg.status === "refused" && asg.refusal_reason && (
                       <p className="text-[11px] text-danger mt-1 max-w-xs truncate">
                         {asg.refusal_reason}
@@ -75,7 +89,7 @@ export const AssignmentTable: React.FC<AssignmentTableProps> = ({
                     )}
                   </td>
                   <td className="py-3 px-4 whitespace-nowrap text-right">
-                    {asg.status === "confirmed" && (
+                    {!isCancelled && asg.status === "confirmed" && (
                       <div className="flex items-center justify-end gap-1.5">
                         {!asg.receipt ? (
                           <Button
