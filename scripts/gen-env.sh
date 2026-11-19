@@ -10,6 +10,7 @@ fi
 
 DOMAIN="${1:-admin.draarbitre.com}"
 ADMIN_EMAIL="${2:-admin@draarbitre.com}"
+APP_DOMAIN="${3:-draarbitre.com}"
 POSTGRES_USER="referee_user"
 POSTGRES_DB="referee_db"
 
@@ -31,6 +32,7 @@ DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTG
 cat <<EOF > "$ENV_FILE"
 ENV=production
 DOMAIN=${DOMAIN}
+APP_DOMAIN=${APP_DOMAIN}
 POSTGRES_USER=${POSTGRES_USER}
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 POSTGRES_DB=${POSTGRES_DB}
@@ -49,8 +51,10 @@ echo ""
 echo "================================================================="
 echo "   PRODUCTION ENVIRONMENT GENERATED SUCCESSFULLY (.env created)  "
 echo "================================================================="
-echo "Admin Email   : ${ADMIN_EMAIL}"
-echo "Admin Password: ${ADMIN_PASSWORD}"
+echo "Admin / VPS Domain: ${DOMAIN}"
+echo "Public App Domain : ${APP_DOMAIN}"
+echo "Admin Email       : ${ADMIN_EMAIL}"
+echo "Admin Password    : ${ADMIN_PASSWORD}"
 echo "================================================================="
 echo "IMPORTANT: Store these credentials in a secure password manager NOW."
 echo "They will not be displayed again. Change your password after first login."

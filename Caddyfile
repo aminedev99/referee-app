@@ -1,4 +1,4 @@
-{$DOMAIN} {
+{$DOMAIN:admin.draarbitre.com}, {$APP_DOMAIN:draarbitre.com} {
     encode gzip zstd
 
     # HTTP Security Headers

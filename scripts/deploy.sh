@@ -6,8 +6,9 @@ if [ ! -f ".env" ]; then
     exit 1
 fi
 
-# Load DOMAIN from .env
+# Load DOMAIN and APP_DOMAIN from .env
 DOMAIN=$(grep -E '^DOMAIN=' .env | cut -d '=' -f2- | tr -d '"' | tr -d "'" || echo "admin.draarbitre.com")
+APP_DOMAIN=$(grep -E '^APP_DOMAIN=' .env | cut -d '=' -f2- | tr -d '"' | tr -d "'" || echo "draarbitre.com")
 
 echo "--> Pulling latest base images..."
 docker compose -f docker-compose.prod.yml pull caddy db
@@ -22,7 +23,7 @@ HEALTHY=false
 
 while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
     ATTEMPT=$((ATTEMPT + 1))
-    # Check if backend responds
+    # Check if backend responds internally
     if docker compose -f docker-compose.prod.yml exec -T backend curl -s -f http://localhost:8000/api/health >/dev/null 2>&1; then
         HEALTHY=true
         break
@@ -39,19 +40,24 @@ fi
 echo "--> Service status:"
 docker compose -f docker-compose.prod.yml ps
 
-echo "--> Running smoke test on https://${DOMAIN}/api/health..."
-SMOKE_URL="https://${DOMAIN}/api/health"
-# Use --insecure or -k only if testing locally or until public cert binds
-STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$SMOKE_URL" || true)
+echo "--> Testing direct internal health endpoint..."
+docker compose -f docker-compose.prod.yml exec -T backend curl -s http://localhost:8000/api/health
+echo ""
 
+echo "--> Running public smoke test on https://${DOMAIN}/api/health (Admin / VPS)..."
+STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://${DOMAIN}/api/health" || true)
 if [ "$STATUS_CODE" = "200" ]; then
-    echo "Smoke test passed! HTTPS API Health returned 200 OK."
+    echo "  [PASS] https://${DOMAIN}/api/health returned 200 OK."
 else
-    echo "Notice: curl to $SMOKE_URL returned HTTP $STATUS_CODE."
-    echo "Testing direct internal health endpoint:"
-    docker compose -f docker-compose.prod.yml exec -T backend curl -s http://localhost:8000/api/health
-    echo ""
-    echo "If DNS has just been configured, Caddy may be waiting for ACME challenge propagation."
+    echo "  [INFO] https://${DOMAIN}/api/health returned HTTP $STATUS_CODE (DNS or Let's Encrypt TLS certificate may still be binding)."
+fi
+
+echo "--> Running public smoke test on https://${APP_DOMAIN}/api/health (App)..."
+APP_STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://${APP_DOMAIN}/api/health" || true)
+if [ "$APP_STATUS_CODE" = "200" ]; then
+    echo "  [PASS] https://${APP_DOMAIN}/api/health returned 200 OK."
+else
+    echo "  [INFO] https://${APP_DOMAIN}/api/health returned HTTP $APP_STATUS_CODE (DNS or Let's Encrypt TLS certificate may still be binding)."
 fi
 
 echo "--> Deployment completed successfully."
