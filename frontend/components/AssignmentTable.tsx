@@ -12,6 +12,14 @@ export interface AssignmentTableProps {
   onDownloadReceipt?: (id: string) => void;
 }
 
+const functionTranslations: Record<string, string> = {
+  "Main referee": "Arbitre principal",
+  "Second referee": "Second arbitre",
+  "Scorer": "Marqueur",
+  "Timekeeper": "Chronométreur",
+  "24s operator": "Opérateur 24s",
+};
+
 export const AssignmentTable: React.FC<AssignmentTableProps> = ({
   assignments,
   onGenerateReceipt,
@@ -23,17 +31,17 @@ export const AssignmentTable: React.FC<AssignmentTableProps> = ({
         <table className="w-full text-left border-collapse text-[14px]">
           <thead>
             <tr className="border-b border-line bg-canvas/60 text-ink-muted text-[12px] font-semibold uppercase tracking-wider">
-              <th className="py-3 px-4">Referee</th>
+              <th className="py-3 px-4">Arbitre</th>
               <th className="py-3 px-4">Match</th>
-              <th className="py-3 px-4">Function</th>
-              <th className="py-3 px-4">Indemnity</th>
-              <th className="py-3 px-4">Status</th>
+              <th className="py-3 px-4">Fonction</th>
+              <th className="py-3 px-4">Indemnité</th>
+              <th className="py-3 px-4">Statut</th>
               <th className="py-3 px-4 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line text-ink">
             {assignments.map((asg) => {
-              const refName = asg.referee?.name || "Referee";
+              const refName = asg.referee?.name || "Arbitre";
               const initials = refName
                 .split(" ")
                 .map((n) => n[0])
@@ -42,6 +50,7 @@ export const AssignmentTable: React.FC<AssignmentTableProps> = ({
                 .toUpperCase();
               const match = asg.match;
               const isCancelled = match?.status === "cancelled";
+              const translatedFunction = functionTranslations[asg.referee_function] || asg.referee_function;
 
               return (
                 <tr key={asg.id} className="hover:bg-canvas/40 transition-colors">
@@ -62,7 +71,7 @@ export const AssignmentTable: React.FC<AssignmentTableProps> = ({
                     </div>
                   </td>
                   <td className="py-3 px-4 whitespace-nowrap text-ink-muted">
-                    {asg.referee_function}
+                    {translatedFunction}
                   </td>
                   <td className="py-3 px-4 whitespace-nowrap font-semibold">
                     {asg.indemnity} MAD
@@ -71,14 +80,14 @@ export const AssignmentTable: React.FC<AssignmentTableProps> = ({
                     <div className="flex items-center gap-1.5">
                       {isCancelled ? (
                         <span className="px-2 py-0.5 rounded-full text-[12px] font-semibold bg-gray-100 text-gray-600 border border-gray-200">
-                          Cancelled
+                          Annulé
                         </span>
                       ) : (
                         <StatusBadge status={asg.status} />
                       )}
                       {asg.needs_attention && (
                         <span className="px-1.5 py-0.5 rounded text-[11px] font-bold bg-danger/10 text-danger border border-danger/20">
-                          No answer
+                          Sans réponse
                         </span>
                       )}
                     </div>
@@ -99,7 +108,7 @@ export const AssignmentTable: React.FC<AssignmentTableProps> = ({
                             className="text-[12px] h-8 px-2.5"
                           >
                             <FileText size={14} className="mr-1" />
-                            Receipt
+                            Reçu
                           </Button>
                         ) : (
                           <Button

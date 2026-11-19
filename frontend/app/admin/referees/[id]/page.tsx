@@ -38,7 +38,7 @@ export default function AdminRefereeDetailPage() {
   if (refLoading) {
     return (
       <>
-        <Navbar title="Referee" backHref="/admin/referees" />
+        <Navbar title="Arbitre" backHref="/admin/referees" />
         <main className="max-w-xl mx-auto w-full p-4 flex flex-col gap-4">
           <Skeleton className="h-20 w-20 rounded-full mx-auto" />
           <Skeleton className="h-6 w-48 mx-auto" />
@@ -51,9 +51,9 @@ export default function AdminRefereeDetailPage() {
   if (refError || !referee) {
     return (
       <>
-        <Navbar title="Referee" backHref="/admin/referees" />
+        <Navbar title="Arbitre" backHref="/admin/referees" />
         <main className="max-w-xl mx-auto w-full p-4">
-          <ErrorState message="Could not load referee profile" onRetry={() => refetch()} />
+          <ErrorState message="Impossible de charger le profil de l'arbitre" onRetry={() => refetch()} />
         </main>
       </>
     );
@@ -65,26 +65,16 @@ export default function AdminRefereeDetailPage() {
     .filter(Boolean)
     .join("")
     .slice(0, 2)
-    .toUpperCase() || "RF";
+    .toUpperCase() || "AR";
 
   const displayPhone = formatPhone(referee.phone);
-  const displayLicense = referee.license_number?.trim() || "Not provided";
-  const displayEmail = referee.email?.trim() || "Not provided";
+  const displayLicense = referee.license_number?.trim() || "Non renseigné";
+  const displayEmail = referee.email?.trim() || "Non renseigné";
   const isInactive = referee.is_active === false;
 
   return (
     <>
-      {/* Top Navbar */}
-      <header className="sticky top-0 z-40 w-full h-14 bg-surface border-b border-line px-4 md:px-6 flex items-center justify-between">
-        <Navbar title="Referee" backHref="/admin/referees" />
-        <Link
-          href={`/admin/referees/${params.id}/edit`}
-          className="p-2 text-ink-muted hover:text-ink transition-colors cursor-pointer"
-          aria-label="Edit referee"
-        >
-          <Edit2 size={18} strokeWidth={1.75} />
-        </Link>
-      </header>
+      <Navbar title={referee.name || "Arbitre"} backHref="/admin/referees" />
 
       <main className="max-w-xl mx-auto w-full px-4 pt-6 pb-20 flex flex-col gap-6">
         {/* Profile Card Header */}
@@ -95,22 +85,22 @@ export default function AdminRefereeDetailPage() {
             </div>
             {isInactive && (
               <span className="absolute bottom-2 right-0 bg-danger text-surface text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full">
-                Inactive
+                Inactif
               </span>
             )}
           </div>
 
           <h2 className="text-[22px] font-bold text-ink tracking-tight flex items-center gap-2">
-            <span>{referee.name || "Not provided"}</span>
+            <span>{referee.name || "Non renseigné"}</span>
             {isInactive && (
               <span className="text-[12px] font-medium bg-danger-tint text-danger px-2 py-0.5 rounded-full border border-danger/20">
-                Inactive
+                Inactif
               </span>
             )}
           </h2>
 
           <p className="text-[13px] text-ink-muted mt-0.5">
-            License {displayLicense} • {referee.category || "National Referee"}
+            Licence {displayLicense} • {referee.category || "Arbitre National"}
           </p>
 
           <div className="flex items-center gap-4 text-[13px] text-ink-muted mt-3">
@@ -124,18 +114,28 @@ export default function AdminRefereeDetailPage() {
               {displayEmail}
             </span>
           </div>
+
+          <div className="mt-4">
+            <Link
+              href={`/admin/referees/${params.id}/edit`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] border border-line bg-surface text-[13px] font-medium text-ink hover:border-brand/40 transition-colors"
+            >
+              <Edit2 size={14} strokeWidth={1.75} />
+              <span>Modifier le profil</span>
+            </Link>
+          </div>
         </div>
 
         {/* 3 Stat Cards in Row */}
         <div className="grid grid-cols-3 gap-2.5">
-          <StatCard label="Assigned" value={referee.assigned_count ?? referee.matches_count} />
+          <StatCard label="Désigné(s)" value={referee.assigned_count ?? referee.matches_count} />
           <StatCard
-            label="Confirmed"
+            label="Confirmé(s)"
             value={referee.confirmed_count ?? Math.round((referee.matches_count * referee.acceptance_rate) / 100)}
             highlight="success"
           />
           <StatCard
-            label="Refused"
+            label="Refusé(s)"
             value={referee.refused_count ?? Math.max(0, referee.matches_count - Math.round((referee.matches_count * referee.acceptance_rate) / 100))}
             highlight="danger"
           />
@@ -146,7 +146,7 @@ export default function AdminRefereeDetailPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-brand" />
-              <h3 className="text-[18px] font-semibold text-ink">Match history</h3>
+              <h3 className="text-[18px] font-semibold text-ink">Historique des matchs</h3>
             </div>
             <span className="text-[12px] font-semibold bg-canvas text-ink-muted px-2 py-0.5 rounded-full">
               {refereeAssignments.length || referee.matches_count}
@@ -164,10 +164,10 @@ export default function AdminRefereeDetailPage() {
                   >
                     <div>
                       <h4 className="text-[15px] font-semibold text-ink">
-                        {m ? `${m.home_team.name} vs ${m.away_team.name}` : "League Match"}
+                        {m ? `${m.home_team.name} vs ${m.away_team.name}` : "Match de championnat"}
                       </h4>
                       <p className="text-[12px] text-ink-muted mt-0.5">
-                        {m?.date || "Sat 22 Nov 2026"}
+                        {m?.date || ""}
                       </p>
                     </div>
                     <div className="flex flex-col items-end gap-1 shrink-0">
@@ -181,7 +181,7 @@ export default function AdminRefereeDetailPage() {
               })
             ) : (
               <div className="p-4 text-[13px] text-ink-muted text-center">
-                No matches recorded yet.
+                Aucun match enregistré pour le moment.
               </div>
             )}
           </Card>

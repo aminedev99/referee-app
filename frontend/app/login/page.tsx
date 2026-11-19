@@ -15,8 +15,8 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next");
   const toast = useToast();
-  const [email, setEmail] = useState("y.elamrani@mail.ma");
-  const [password, setPassword] = useState("Referee12345!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -28,23 +28,13 @@ function LoginForm() {
       formData.append("username", email);
       formData.append("password", password);
       await login(formData, nextPath);
-      toast.success("Signed in successfully");
+      toast.success("Connexion réussie");
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to sign in. Please check credentials.";
+      const message = err instanceof Error ? err.message : "Échec de la connexion. Veuillez vérifier vos identifiants.";
       toast.error(message);
     } finally {
       setLoading(false);
     }
-  };
-
-  const setAdminDemo = () => {
-    setEmail("admin@referee.local");
-    setPassword("Admin12345!");
-  };
-
-  const setRefereeDemo = () => {
-    setEmail("referee@referee.local");
-    setPassword("Referee12345!");
   };
 
   return (
@@ -72,9 +62,9 @@ function LoginForm() {
             </svg>
           </div>
 
-          <h1 className="text-[24px] font-bold text-ink mb-1">Referee Manager</h1>
+          <h1 className="text-[24px] font-bold text-ink mb-1">Gestion des Arbitres</h1>
           <p className="text-[14px] text-ink-muted mb-6 text-center">
-            Sign in to access your referee schedule and assignments
+            Connectez-vous pour accéder à vos convocations et désignations
           </p>
 
           <form onSubmit={handleSubmit} className="w-full flex flex-col gap-4">
@@ -82,7 +72,7 @@ function LoginForm() {
               <Input
                 id="email"
                 type="email"
-                placeholder="name@mail.ma"
+                placeholder="nom@mail.ma"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -90,7 +80,7 @@ function LoginForm() {
               />
             </Field>
 
-            <Field label="Password" htmlFor="password" required>
+            <Field label="Mot de passe" htmlFor="password" required>
               <div className="relative">
                 <Input
                   id="password"
@@ -106,7 +96,7 @@ function LoginForm() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink transition-colors cursor-pointer"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
                 >
                   {showPassword ? (
                     <EyeOff size={18} strokeWidth={1.75} />
@@ -125,32 +115,12 @@ function LoginForm() {
               loading={loading}
               className="mt-2"
             >
-              Sign In
+              Se connecter
             </Button>
           </form>
 
-          {/* Quick Demo Switchers */}
-          <div className="w-full flex items-center justify-center gap-2 mt-4 pt-3 border-t border-line text-[12px]">
-            <span className="text-ink-muted">Quick test:</span>
-            <button
-              type="button"
-              onClick={setAdminDemo}
-              className="text-brand font-medium hover:underline cursor-pointer"
-            >
-              Admin
-            </button>
-            <span className="text-line">•</span>
-            <button
-              type="button"
-              onClick={setRefereeDemo}
-              className="text-brand font-medium hover:underline cursor-pointer"
-            >
-              Referee
-            </button>
-          </div>
-
-          <p className="text-[12px] text-ink-muted text-center mt-4 leading-tight">
-            Contact the administration if you forgot your password
+          <p className="text-[12px] text-ink-muted text-center mt-6 leading-tight">
+            Contactez l'administration si vous avez oublié votre mot de passe
           </p>
         </Card>
       </div>

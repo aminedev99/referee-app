@@ -5,3 +5,9 @@ __pycache__
 .pytest_cache
 .venv
 tests
+.git
+.env*
+receipts
+backups
+node_modules
+uiS

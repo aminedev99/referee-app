@@ -36,13 +36,13 @@ export default function RefereeAssignmentsPage() {
   const confirmMutation = useMutation({
     mutationFn: (id: string) => api.confirmAssignment(id),
     onSuccess: () => {
-      toast.success("Assignment confirmed successfully");
+      toast.success("Désignation confirmée avec succès");
       queryClient.invalidateQueries({ queryKey: ["me-assignments"] });
       queryClient.invalidateQueries({ queryKey: ["me-stats"] });
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to confirm assignment");
+      toast.error(err.message || "Échec de la confirmation de la désignation");
     },
   });
 
@@ -50,7 +50,7 @@ export default function RefereeAssignmentsPage() {
     mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
       api.refuseAssignment(id, reason),
     onSuccess: () => {
-      toast.success("Assignment refused");
+      toast.success("Désignation refusée");
       setRefuseTarget(null);
       setRefusalReason("");
       queryClient.invalidateQueries({ queryKey: ["me-assignments"] });
@@ -58,7 +58,7 @@ export default function RefereeAssignmentsPage() {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to refuse assignment");
+      toast.error(err.message || "Échec du refus de la désignation");
     },
   });
 
@@ -94,14 +94,14 @@ export default function RefereeAssignmentsPage() {
   };
 
   const tabsConfig = [
-    { id: "pending", label: "To respond", count: pendingList.length },
-    { id: "confirmed", label: "Confirmed", count: confirmedList.length },
-    { id: "past", label: "Past" },
+    { id: "pending", label: "À répondre", count: pendingList.length },
+    { id: "confirmed", label: "Confirmées", count: confirmedList.length },
+    { id: "past", label: "Passées" },
   ];
 
   return (
     <>
-      <Navbar title="Assignments" />
+      <Navbar title="Désignations" />
 
       <main className="max-w-xl mx-auto w-full px-4 pt-4 flex flex-col gap-4">
         {/* Tab switcher */}
@@ -120,10 +120,10 @@ export default function RefereeAssignmentsPage() {
           <EmptyState
             message={
               activeTab === "pending"
-                ? "No pending assignments to respond to."
+                ? "Aucune désignation en attente de réponse."
                 : activeTab === "confirmed"
-                ? "No confirmed upcoming matches."
-                : "No past match history."
+                ? "Aucun match à venir confirmé."
+                : "Aucun historique de match."
             }
           />
         ) : (
@@ -144,11 +144,11 @@ export default function RefereeAssignmentsPage() {
         )}
       </main>
 
-      {/* Refuse Modal / Bottom Sheet (Screen 04) */}
+      {/* Refuse Modal / Bottom Sheet */}
       <Modal
         isOpen={!!refuseTarget}
         onClose={() => setRefuseTarget(null)}
-        title="Refuse assignment"
+        title="Refuser la désignation"
         subtitle={
           refuseTarget?.match
             ? `${refuseTarget.match.home_team.name} vs ${refuseTarget.match.away_team.name}, ${refuseTarget.match.date}`
@@ -156,10 +156,10 @@ export default function RefereeAssignmentsPage() {
         }
       >
         <div className="flex flex-col gap-4 pt-1">
-          <Field label="Reason (optional)" htmlFor="refusal-reason">
+          <Field label="Motif (facultatif)" htmlFor="refusal-reason">
             <Textarea
               id="refusal-reason"
-              placeholder="Tell the administration why you cannot attend"
+              placeholder="Indiquez à l'administration pourquoi vous ne pouvez pas participer"
               value={refusalReason}
               onChange={(e) => setRefusalReason(e.target.value)}
               rows={3}
@@ -174,7 +174,7 @@ export default function RefereeAssignmentsPage() {
               loading={refuseMutation.isPending}
               onClick={handleConfirmRefuse}
             >
-              Refuse assignment
+              Refuser la désignation
             </Button>
             <Button
               variant="ghost"
@@ -183,7 +183,7 @@ export default function RefereeAssignmentsPage() {
               disabled={refuseMutation.isPending}
               onClick={() => setRefuseTarget(null)}
             >
-              Cancel
+              Annuler
             </Button>
           </div>
         </div>

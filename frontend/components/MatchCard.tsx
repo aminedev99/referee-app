@@ -13,14 +13,14 @@ export interface MatchCardProps {
 }
 
 export const MatchCard: React.FC<MatchCardProps> = ({ match, href }) => {
-  // Format date e.g. "Sat 22 Nov, 18:30"
+  // Format date e.g. "sam. 22 nov., 18:30"
   let formattedDate = match.date;
   try {
     const d = new Date(`${match.date}T${match.time || "00:00"}`);
     if (!isNaN(d.getTime())) {
-      const dayName = d.toLocaleDateString("en-GB", { weekday: "short" });
-      const dayNum = d.toLocaleDateString("en-GB", { day: "numeric" });
-      const month = d.toLocaleDateString("en-GB", { month: "short" });
+      const dayName = d.toLocaleDateString("fr-FR", { weekday: "short" });
+      const dayNum = d.toLocaleDateString("fr-FR", { day: "numeric" });
+      const month = d.toLocaleDateString("fr-FR", { month: "short" });
       formattedDate = `${dayName} ${dayNum} ${month}, ${match.time}`;
     }
   } catch {
@@ -58,8 +58,8 @@ export const MatchCard: React.FC<MatchCardProps> = ({ match, href }) => {
       <div className="flex items-center gap-1.5 text-[12px] text-ink-muted pt-1 border-t border-line">
         <Users size={14} strokeWidth={1.75} className="shrink-0" />
         <span>
-          {refCount} referee{refCount !== 1 ? "s" : ""}, {confirmedCount} confirmed
-          {pendingCount > 0 ? `, ${pendingCount} pending` : ""}
+          {refCount} arbitre{refCount > 1 ? "s" : ""}, {confirmedCount} confirmé{confirmedCount > 1 ? "s" : ""}
+          {pendingCount > 0 ? `, ${pendingCount} en attente` : ""}
         </span>
       </div>
     </Card>

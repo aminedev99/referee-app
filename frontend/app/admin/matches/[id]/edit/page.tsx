@@ -41,7 +41,7 @@ export default function AdminEditMatchPage() {
   const updateMutation = useMutation({
     mutationFn: (data: CreateMatchInput) => api.updateMatch(params.id, data),
     onSuccess: () => {
-      toast.success("Match updated successfully");
+      toast.success("Match mis à jour avec succès");
       queryClient.invalidateQueries({ queryKey: ["admin-matches"] });
       queryClient.invalidateQueries({ queryKey: ["admin-match", params.id] });
       queryClient.invalidateQueries({ queryKey: ["admin-assignments"] });
@@ -49,7 +49,7 @@ export default function AdminEditMatchPage() {
       router.push(`/admin/matches/${params.id}`);
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to update match");
+      toast.error(err.message || "Échec de la mise à jour du match");
     },
   });
 
@@ -58,7 +58,7 @@ export default function AdminEditMatchPage() {
   return (
     <>
       <Navbar
-        title="Edit match"
+        title="Modifier le match"
         backHref={`/admin/matches/${params.id}`}
         hideBottomNav={true}
       />
@@ -68,7 +68,7 @@ export default function AdminEditMatchPage() {
         <div className="p-3.5 bg-[#FFF1E8] border border-brand/30 rounded-[12px] flex items-start gap-2.5 text-brand text-[13px] mb-4">
           <AlertCircle size={18} className="shrink-0 mt-0.5" />
           <span>
-            Changing date, venue or city asks all referees to confirm again.
+            Modifier la date, la salle ou la ville demandera à tous les arbitres de confirmer à nouveau.
           </span>
         </div>
 
@@ -79,7 +79,7 @@ export default function AdminEditMatchPage() {
             <Skeleton className="h-28 w-full" />
           </div>
         ) : matchError || !match ? (
-          <ErrorState message="Could not load match details" onRetry={() => refetchMatch()} />
+          <ErrorState message="Impossible de charger les détails du match" onRetry={() => refetchMatch()} />
         ) : (
           <MatchForm
             initialData={match}

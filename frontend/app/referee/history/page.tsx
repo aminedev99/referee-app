@@ -24,7 +24,7 @@ export default function RefereeHistoryPage() {
 
   return (
     <>
-      <Navbar title="History" />
+      <Navbar title="Historique" />
 
       <main className="max-w-xl mx-auto w-full px-4 pt-4 flex flex-col gap-4">
         {isLoading ? (
@@ -32,7 +32,7 @@ export default function RefereeHistoryPage() {
         ) : isError ? (
           <ErrorState onRetry={() => refetch()} />
         ) : historyList.length === 0 ? (
-          <EmptyState message="No past assignments yet." />
+          <EmptyState message="Aucune désignation passée pour le moment." />
         ) : (
           <div className="flex flex-col gap-3">
             {historyList.map((asg) => (

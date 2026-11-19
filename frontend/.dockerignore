@@ -1,4 +1,10 @@
 node_modules
 .next
-.env*.local
 .git
+.env*
+receipts
+backups
+tests
+__pycache__
+uiS
+*.tsbuildinfo

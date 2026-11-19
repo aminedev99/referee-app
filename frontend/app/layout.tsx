@@ -10,8 +10,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Referee Manager",
-  description: "Official basketball referee management system",
+  title: "Gestion des Arbitres",
+  description: "Système officiel de gestion des désignations d'arbitres de basketball",
 };
 
 export default function RootLayout({
@@ -20,7 +20,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} h-full antialiased`}>
+    <html lang="fr" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-[#F7F5F2] text-[#111827]">
         <Providers>{children}</Providers>
       </body>

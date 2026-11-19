@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  poweredByHeader: false,
+  productionBrowserSourceMaps: false,
   turbopack: {
     rules: {
       "*.css": {
@@ -11,9 +13,6 @@ const nextConfig: NextConfig = {
     },
   },
   async rewrites() {
-    if (process.env.NEXT_PUBLIC_USE_MOCK === "true") {
-      return [];
-    }
     const target = process.env.API_PROXY_TARGET || "http://backend:8000";
     return [
       {

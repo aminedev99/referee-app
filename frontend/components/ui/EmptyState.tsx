@@ -37,14 +37,14 @@ export const ErrorState: React.FC<{
   message?: string;
   onRetry: () => void;
   className?: string;
-}> = ({ message = "Failed to load data.", onRetry, className = "" }) => {
+}> = ({ message = "Échec du chargement des données.", onRetry, className = "" }) => {
   return (
     <div
       className={`flex flex-col items-center justify-center p-8 text-center bg-[#FDECEC] border border-danger/20 rounded-[12px] ${className}`}
     >
       <p className="text-[14px] font-medium text-danger mb-3">{message}</p>
       <Button variant="danger" size="md" onClick={onRetry}>
-        Retry
+        Réessayer
       </Button>
     </div>
   );

@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+import secrets
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Response
 from sqlalchemy.orm import Session, joinedload
@@ -11,7 +13,7 @@ from app.schemas import (
     RefereeDetailOut,
     ResetPasswordInput,
 )
-from app.security import get_password_hash
+from app.security import get_password_hash, validate_password_strength
 from app.services.stats import get_referees_stats_map, get_referee_stats
 from app.services.phone import normalize_moroccan_phone
 
@@ -90,11 +92,15 @@ def create_referee(
             detail=f"Referee with license number '{license_clean}' already exists",
         )
 
-    raw_password = ref_in.password or ref_in.temporary_password or "Referee12345!"
-    if len(raw_password) < 8:
+    raw_password = ref_in.password or ref_in.temporary_password
+    if not raw_password:
+        raw_password = secrets.token_urlsafe(9)
+    try:
+        validate_password_strength(raw_password, min_length=8)
+    except ValueError as ve:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password must be at least 8 characters long",
+            detail=str(ve),
         )
 
     full_name = (ref_in.full_name or ref_in.name or "").strip()
@@ -113,6 +119,7 @@ def create_referee(
         hashed_password=hashed_pwd,
         role="referee",
         is_active=True,
+        password_changed_at=datetime.now(timezone.utc),
     )
     db.add(user)
     db.flush()
@@ -273,10 +280,12 @@ def reset_referee_password(
             detail="Referee or associated user account not found",
         )
 
-    if len(reset_in.password) < 8:
+    try:
+        validate_password_strength(reset_in.password, min_length=8)
+    except ValueError as ve:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password must be at least 8 characters long",
+            detail=str(ve),
         )
 
     user = db.query(User).filter(User.id == referee.user_id).first()
@@ -287,6 +296,7 @@ def reset_referee_password(
         )
 
     user.hashed_password = get_password_hash(reset_in.password)
+    user.password_changed_at = datetime.now(timezone.utc)
     db.commit()
     return {"status": "ok", "message": "Password reset successfully"}
 

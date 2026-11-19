@@ -30,7 +30,7 @@ export default function NewMatchPage() {
     mutationFn: (data: CreateMatchInput) => api.createMatch(data),
     onSuccess: (createdMatch: Match, variables: CreateMatchInput) => {
       const n = variables.assignments?.length || 0;
-      toast.success(`Match created, ${n} invitations sent`);
+      toast.success(`Match créé, ${n} convocation${n > 1 ? "s" : ""} envoyée${n > 1 ? "s" : ""}`);
       queryClient.invalidateQueries({ queryKey: ["admin-matches"] });
       queryClient.invalidateQueries({ queryKey: ["admin-assignments"] });
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
@@ -38,7 +38,7 @@ export default function NewMatchPage() {
       router.push(`/admin/matches/${createdMatch.id}`);
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to create match");
+      toast.error(err.message || "Échec de la création du match");
     },
   });
 
@@ -47,7 +47,7 @@ export default function NewMatchPage() {
 
   return (
     <>
-      <Navbar title="New match" backHref="/admin/matches" hideBottomNav={true} />
+      <Navbar title="Nouveau match" backHref="/admin/matches" hideBottomNav={true} />
 
       <main className="max-w-xl mx-auto w-full px-4 pt-4">
         {isLoading ? (
@@ -58,7 +58,7 @@ export default function NewMatchPage() {
           </div>
         ) : isError ? (
           <ErrorState
-            message="Could not load teams or referees"
+            message="Impossible de charger les équipes ou les arbitres"
             onRetry={() => {
               refetchTeams();
               refetchRefs();

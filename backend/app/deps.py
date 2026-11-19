@@ -53,6 +53,17 @@ def get_current_user(
             detail="User account is deactivated",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if user.password_changed_at is not None:
+        iat = payload.get("iat")
+        if iat is not None:
+            # Allow up to 1 second difference for timestamp precision
+            pwd_changed_ts = int(user.password_changed_at.timestamp())
+            if iat < pwd_changed_ts:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token has been invalidated by a password change. Please log in again.",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
     return user
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:

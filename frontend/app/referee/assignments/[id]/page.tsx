@@ -26,27 +26,38 @@ export default function RefereeAssignmentDetailPage() {
   const [refusalReason, setRefusalReason] = useState("");
 
   const {
-    data: assignments = [],
-    isLoading,
-    isError,
+    data: singleAssignment,
+    isLoading: isLoadingSingle,
+    isError: isSingleError,
     refetch,
+  } = useQuery<Assignment>({
+    queryKey: ["me-assignment", params.id],
+    queryFn: () => api.getMeAssignmentById(params.id),
+    enabled: !!params.id,
+  });
+
+  const {
+    data: assignments = [],
   } = useQuery<Assignment[]>({
     queryKey: ["me-assignments"],
     queryFn: () => api.getMeAssignments(),
   });
 
-  const assignment = assignments.find((a) => a.id === params.id);
+  const assignment = singleAssignment || assignments.find((a) => a.id === params.id);
   const match = assignment?.match;
+  const isLoading = isLoadingSingle && !assignment;
 
   const confirmMutation = useMutation({
     mutationFn: (id: string) => api.confirmAssignment(id),
     onSuccess: () => {
-      toast.success("Assignment confirmed successfully");
+      toast.success("Désignation confirmée avec succès");
       queryClient.invalidateQueries({ queryKey: ["me-assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["me-assignment", params.id] });
       queryClient.invalidateQueries({ queryKey: ["me-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to confirm assignment");
+      toast.error(err.message || "Échec de la confirmation de la désignation");
     },
   });
 
@@ -54,20 +65,22 @@ export default function RefereeAssignmentDetailPage() {
     mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
       api.refuseAssignment(id, reason),
     onSuccess: () => {
-      toast.success("Assignment refused");
+      toast.success("Désignation refusée");
       setIsRefuseOpen(false);
       queryClient.invalidateQueries({ queryKey: ["me-assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["me-assignment", params.id] });
       queryClient.invalidateQueries({ queryKey: ["me-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to refuse assignment");
+      toast.error(err.message || "Échec du refus de la désignation");
     },
   });
 
   if (isLoading) {
     return (
       <>
-        <Navbar title="Assignment" backHref="/referee" />
+        <Navbar title="Désignation" backHref="/referee" />
         <main className="max-w-xl mx-auto w-full p-4 flex flex-col gap-4">
           <Skeleton className="h-6 w-32" />
           <Skeleton className="h-8 w-64" />
@@ -77,13 +90,13 @@ export default function RefereeAssignmentDetailPage() {
     );
   }
 
-  if (isError || !assignment) {
+  if ((isSingleError && !assignment) || !assignment) {
     return (
       <>
-        <Navbar title="Assignment" backHref="/referee" />
+        <Navbar title="Désignation" backHref="/referee" />
         <main className="max-w-xl mx-auto w-full p-4">
           <ErrorState
-            message="Assignment could not be found."
+            message="Désignation introuvable."
             onRetry={() => refetch()}
           />
         </main>
@@ -91,13 +104,13 @@ export default function RefereeAssignmentDetailPage() {
     );
   }
 
-  // Format date e.g. "Sat 22 Nov 2026"
+  // Format date e.g. "sam. 22 nov. 2026"
   let formattedDate = match?.date || "";
   try {
     if (match?.date) {
       const d = new Date(match.date);
       if (!isNaN(d.getTime())) {
-        formattedDate = d.toLocaleDateString("en-GB", {
+        formattedDate = d.toLocaleDateString("fr-FR", {
           weekday: "short",
           day: "numeric",
           month: "short",
@@ -129,9 +142,18 @@ export default function RefereeAssignmentDetailPage() {
     ? matchDateTime.getTime() - now.getTime() < 24 * 3600 * 1000
     : false;
 
+  const functionTranslations: Record<string, string> = {
+    "Main referee": "Arbitre principal",
+    "Second referee": "Second arbitre",
+    "Scorer": "Marqueur",
+    "Timekeeper": "Chronométreur",
+    "24s operator": "Opérateur 24s",
+  };
+  const translatedFunction = functionTranslations[assignment.referee_function] || assignment.referee_function;
+
   return (
     <>
-      <Navbar title="Assignment" backHref="/referee" />
+      <Navbar title="Désignation" backHref="/referee" />
 
       <main className="max-w-xl mx-auto w-full px-4 pt-4 flex flex-col gap-4 pb-28">
         {/* Header row */}
@@ -139,19 +161,19 @@ export default function RefereeAssignmentDetailPage() {
           <div className="flex items-center gap-2">
             {isCancelled ? (
               <span className="px-2.5 py-1 rounded-full text-[12px] font-semibold bg-gray-100 text-gray-600 border border-gray-200">
-                Cancelled
+                Annulé
               </span>
             ) : (
               <StatusBadge status={assignment.status} />
             )}
             {assignment.needs_attention && !isCancelled && (
               <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-danger/10 text-danger border border-danger/20">
-                No answer
+                Sans réponse
               </span>
             )}
           </div>
           <span className="text-[13px] font-medium text-ink-muted">
-            Match #{match?.match_number || "2026-88"}
+            {match?.match_number ? `Match #${match.match_number}` : ""}
           </span>
         </div>
 
@@ -172,34 +194,36 @@ export default function RefereeAssignmentDetailPage() {
         <Card className="divide-y divide-line p-0 overflow-hidden">
           <div className="flex items-center justify-between p-3.5 text-[14px]">
             <span className="text-ink-muted">Date</span>
-            <span className="font-medium text-ink">{formattedDate}</span>
+            <span className="font-medium text-ink">{formattedDate || "-"}</span>
           </div>
           <div className="flex items-center justify-between p-3.5 text-[14px]">
-            <span className="text-ink-muted">Time</span>
-            <span className="font-medium text-ink">{match?.time || "18:30"}</span>
+            <span className="text-ink-muted">Heure</span>
+            <span className="font-medium text-ink">{match?.time || "-"}</span>
           </div>
           <div className="flex items-center justify-between p-3.5 text-[14px]">
-            <span className="text-ink-muted">City</span>
-            <span className="font-medium text-ink">{match?.city || "Casablanca"}</span>
+            <span className="text-ink-muted">Ville</span>
+            <span className="font-medium text-ink">{match?.city || "-"}</span>
           </div>
           <div className="flex items-center justify-between p-3.5 text-[14px]">
-            <span className="text-ink-muted">Venue</span>
-            <span className="font-medium text-ink">{match?.venue || "Salle Mohammed V"}</span>
+            <span className="text-ink-muted">Salle</span>
+            <span className="font-medium text-ink">{match?.venue || "-"}</span>
           </div>
           <div className="flex items-center justify-between p-3.5 text-[14px]">
             <span className="text-ink-muted">Division</span>
-            <span className="font-medium text-ink">{match?.division || "1DV"}</span>
+            <span className="font-medium text-ink">{match?.division || "-"}</span>
           </div>
           <div className="flex items-center justify-between p-3.5 text-[14px]">
-            <span className="text-ink-muted">Category</span>
-            <span className="font-medium text-ink">{match?.category || "Men"}</span>
+            <span className="text-ink-muted">Catégorie</span>
+            <span className="font-medium text-ink">
+              {match?.category === "Men" ? "Hommes" : match?.category === "Women" ? "Femmes" : match?.category || "-"}
+            </span>
           </div>
           <div className="flex items-center justify-between p-3.5 text-[14px]">
-            <span className="text-ink-muted">Function</span>
-            <span className="font-medium text-ink">{assignment.referee_function}</span>
+            <span className="text-ink-muted">Fonction</span>
+            <span className="font-medium text-ink">{translatedFunction}</span>
           </div>
           <div className="flex items-center justify-between p-3.5 text-[14px] bg-canvas/30">
-            <span className="font-medium text-ink">Indemnity</span>
+            <span className="font-medium text-ink">Indemnité</span>
             <span className="text-[16px] font-bold text-ink">
               {assignment.indemnity} MAD
             </span>
@@ -211,12 +235,12 @@ export default function RefereeAssignmentDetailPage() {
           <Card className="flex flex-col gap-3 p-4">
             <div className="flex items-center gap-2">
               <FileText size={18} strokeWidth={1.75} className="text-brand" />
-              <h3 className="text-[16px] font-semibold text-ink">Receipt</h3>
+              <h3 className="text-[16px] font-semibold text-ink">Reçu</h3>
             </div>
             {assignment.receipt ? (
               <>
                 <p className="text-[13px] text-ink-muted">
-                  Receipt No. {assignment.receipt.receipt_number}, issued{" "}
+                  Reçu N° {assignment.receipt.receipt_number}, émis le{" "}
                   {assignment.receipt.issued_at}
                 </p>
                 <Button
@@ -225,25 +249,25 @@ export default function RefereeAssignmentDetailPage() {
                   fullWidth
                   onClick={async () => {
                     try {
-                      toast.info("Downloading receipt PDF...");
+                      toast.info("Téléchargement du reçu PDF...");
                       await api.downloadReceiptPdf(
                         assignment.id,
                         `recu_${assignment.receipt?.receipt_number || assignment.id}.pdf`
                       );
                     } catch (err: unknown) {
                       const msg =
-                        err instanceof Error ? err.message : "Failed to download receipt";
+                        err instanceof Error ? err.message : "Échec du téléchargement du reçu";
                       toast.error(msg);
                     }
                   }}
                 >
                   <Download size={16} strokeWidth={1.75} className="mr-2" />
-                  Download PDF
+                  Télécharger le PDF
                 </Button>
               </>
             ) : (
               <p className="text-[13px] text-ink-muted">
-                Receipt will be generated by administration upon confirmation.
+                Le reçu sera généré par l'administration après confirmation.
               </p>
             )}
           </Card>
@@ -252,7 +276,7 @@ export default function RefereeAssignmentDetailPage() {
         {/* Refused reason message if refused */}
         {assignment.status === "refused" && assignment.refusal_reason && (
           <div className="bg-[#FDECEC] border border-danger/20 rounded-[12px] p-4 text-[14px] text-danger">
-            <span className="font-semibold">Reason for refusal: </span>
+            <span className="font-semibold">Motif du refus : </span>
             {assignment.refusal_reason}
           </div>
         )}
@@ -261,7 +285,7 @@ export default function RefereeAssignmentDetailPage() {
         {!isCancelled && !isPast && isWithin24h && assignment.status !== "pending" && (
           <div className="flex items-center gap-2 p-3 bg-gray-50 border border-gray-200 rounded-[12px] text-[13px] text-ink-muted">
             <AlertCircle size={16} className="text-gray-400 shrink-0" />
-            <span>Too close to the match, contact the administration</span>
+            <span>Trop proche du match, contactez l'administration</span>
           </div>
         )}
 
@@ -277,7 +301,7 @@ export default function RefereeAssignmentDetailPage() {
                   onClick={() => setIsRefuseOpen(true)}
                   disabled={confirmMutation.isPending}
                 >
-                  Refuse
+                  Refuser
                 </Button>
                 <Button
                   variant="primary"
@@ -286,7 +310,7 @@ export default function RefereeAssignmentDetailPage() {
                   loading={confirmMutation.isPending}
                   onClick={() => confirmMutation.mutate(assignment.id)}
                 >
-                  Confirm
+                  Confirmer
                 </Button>
               </>
             )}
@@ -299,7 +323,7 @@ export default function RefereeAssignmentDetailPage() {
                 onClick={() => setIsRefuseOpen(true)}
                 className="text-danger border-danger/30 hover:bg-danger/10"
               >
-                Change to Refused
+                Changer en Refusé
               </Button>
             )}
 
@@ -311,7 +335,7 @@ export default function RefereeAssignmentDetailPage() {
                 loading={confirmMutation.isPending}
                 onClick={() => confirmMutation.mutate(assignment.id)}
               >
-                Change to Confirmed
+                Changer en Confirmé
               </Button>
             )}
           </div>
@@ -322,7 +346,7 @@ export default function RefereeAssignmentDetailPage() {
       <Modal
         isOpen={isRefuseOpen}
         onClose={() => setIsRefuseOpen(false)}
-        title={assignment.status === "confirmed" ? "Change to Refused" : "Refuse assignment"}
+        title={assignment.status === "confirmed" ? "Changer en Refusé" : "Refuser la désignation"}
         subtitle={
           match
             ? `${match.home_team.name} vs ${match.away_team.name}, ${formattedDate}`
@@ -330,10 +354,10 @@ export default function RefereeAssignmentDetailPage() {
         }
       >
         <div className="flex flex-col gap-4 pt-1">
-          <Field label="Reason (optional)" htmlFor="refuse-reason-modal">
+          <Field label="Motif (facultatif)" htmlFor="refuse-reason-modal">
             <Textarea
               id="refuse-reason-modal"
-              placeholder="Tell the administration why you cannot attend"
+              placeholder="Indiquez à l'administration pourquoi vous ne pouvez pas participer"
               value={refusalReason}
               onChange={(e) => setRefusalReason(e.target.value)}
               rows={3}
@@ -353,7 +377,7 @@ export default function RefereeAssignmentDetailPage() {
                 })
               }
             >
-              Confirm refusal
+              Confirmer le refus
             </Button>
             <Button
               variant="ghost"
@@ -362,7 +386,7 @@ export default function RefereeAssignmentDetailPage() {
               disabled={refuseMutation.isPending}
               onClick={() => setIsRefuseOpen(false)}
             >
-              Cancel
+              Annuler
             </Button>
           </div>
         </div>

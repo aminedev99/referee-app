@@ -55,7 +55,7 @@ export const NotificationBell: React.FC = () => {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        aria-label={`Notifications (${unreadCount} unread)`}
+        aria-label={`Notifications (${unreadCount} non lues)`}
         className="relative p-2 rounded-[8px] text-ink hover:bg-canvas transition-colors duration-150 cursor-pointer"
       >
         <Bell size={22} strokeWidth={1.75} />
@@ -87,7 +87,7 @@ export const NotificationBell: React.FC = () => {
                 <h3 className="text-[16px] font-semibold text-ink">Notifications</h3>
                 {unreadCount > 0 && (
                   <span className="text-[12px] font-medium bg-[#FFF1E8] text-brand px-2 py-0.5 rounded-full">
-                    {unreadCount} new
+                    {unreadCount} nouvelle{unreadCount > 1 ? "s" : ""}
                   </span>
                 )}
               </div>
@@ -97,7 +97,7 @@ export const NotificationBell: React.FC = () => {
                   onClick={() => markAllMutation.mutate()}
                   className="text-[13px] font-medium text-brand hover:text-brand-hover transition-colors cursor-pointer"
                 >
-                  Mark all as read
+                  Tout marquer comme lu
                 </button>
               )}
             </div>
@@ -106,7 +106,7 @@ export const NotificationBell: React.FC = () => {
             <div className="overflow-y-auto divide-y divide-line py-1">
               {notifications.length === 0 ? (
                 <div className="p-6 text-center text-[14px] text-ink-muted">
-                  No notifications
+                  Aucune notification
                 </div>
               ) : (
                 notifications.map((n) => (

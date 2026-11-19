@@ -41,16 +41,16 @@ export const Navbar: React.FC<NavbarProps> = ({ title, backHref, hideBottomNav }
   const shouldHideBottomNav = hideBottomNav || isMatchFormRoute;
 
   const adminNavItems = [
-    { label: "Matches", href: "/admin/matches", icon: Calendar },
-    { label: "Referees", href: "/admin/referees", icon: Users },
-    { label: "Assignments", href: "/admin/assignments", icon: CheckSquare },
+    { label: "Matchs", href: "/admin/matches", icon: Calendar },
+    { label: "Arbitres", href: "/admin/referees", icon: Users },
+    { label: "Désignations", href: "/admin/assignments", icon: CheckSquare },
   ];
 
   const refereeNavItems = [
-    { label: "Assignments", href: "/referee", icon: CheckSquare },
-    { label: "History", href: "/referee/history", icon: Clock },
-    { label: "Stats", href: "/referee/stats", icon: BarChart3 },
-    { label: "Profile", href: "/referee/profile", icon: UserIcon },
+    { label: "Désignations", href: "/referee", icon: CheckSquare },
+    { label: "Historique", href: "/referee/history", icon: Clock },
+    { label: "Statistiques", href: "/referee/stats", icon: BarChart3 },
+    { label: "Profil", href: "/referee/profile", icon: UserIcon },
   ];
 
   return (
@@ -65,13 +65,13 @@ export const Navbar: React.FC<NavbarProps> = ({ title, backHref, hideBottomNav }
               className="flex items-center gap-1 text-[16px] font-medium text-ink hover:text-brand cursor-pointer transition-colors"
             >
               <span className="text-brand font-semibold text-[18px]">‹</span>
-              <span>{title || "Back"}</span>
+              <span>{title || "Retour"}</span>
             </button>
           ) : (
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-brand" />
               <h1 className="text-[18px] font-semibold text-ink tracking-tight">
-                {title || (isAdmin ? "Referee Manager Admin" : "Assignments")}
+                {title || (isAdmin ? "Administration" : "Désignations")}
               </h1>
             </div>
           )}
@@ -79,7 +79,7 @@ export const Navbar: React.FC<NavbarProps> = ({ title, backHref, hideBottomNav }
 
         {/* Referee md+ Top Navigation */}
         {!isAdmin && (
-          <nav className="hidden md:flex items-center gap-6" aria-label="Referee Navigation">
+          <nav className="hidden md:flex items-center gap-6" aria-label="Navigation Arbitre">
             {refereeNavItems.map((item) => {
               const isActive =
                 item.href === "/referee"
@@ -110,8 +110,8 @@ export const Navbar: React.FC<NavbarProps> = ({ title, backHref, hideBottomNav }
             <button
               type="button"
               onClick={logout}
-              title="Sign out"
-              aria-label="Sign out"
+              title="Déconnexion"
+              aria-label="Déconnexion"
               className="hidden md:flex p-2 text-ink-muted hover:text-danger rounded-[8px] transition-colors"
             >
               <LogOut size={20} strokeWidth={1.75} />
@@ -124,7 +124,7 @@ export const Navbar: React.FC<NavbarProps> = ({ title, backHref, hideBottomNav }
       {isAdmin && (
         <aside
           className="hidden md:flex fixed top-0 left-0 bottom-0 w-60 bg-surface border-r border-line flex-col z-40"
-          aria-label="Admin Navigation"
+          aria-label="Navigation Admin"
         >
           {/* Logo brand */}
           <div className="h-14 px-5 border-b border-line flex items-center gap-2.5">
@@ -132,8 +132,8 @@ export const Navbar: React.FC<NavbarProps> = ({ title, backHref, hideBottomNav }
               <Shield size={16} strokeWidth={2} />
             </div>
             <div className="flex flex-col">
-              <span className="text-[15px] font-bold text-ink leading-none">Referee Manager</span>
-              <span className="text-[11px] text-ink-muted leading-tight mt-0.5">Admin Workspace</span>
+              <span className="text-[15px] font-bold text-ink leading-none">Gestion Arbitres</span>
+              <span className="text-[11px] text-ink-muted leading-tight mt-0.5">Espace Administration</span>
             </div>
           </div>
 
@@ -149,7 +149,7 @@ export const Navbar: React.FC<NavbarProps> = ({ title, backHref, hideBottomNav }
               }`}
             >
               <Layers size={18} strokeWidth={1.75} />
-              <span>Dashboard</span>
+              <span>Tableau de bord</span>
             </Link>
 
             {adminNavItems.map((item) => {
@@ -182,7 +182,7 @@ export const Navbar: React.FC<NavbarProps> = ({ title, backHref, hideBottomNav }
               }`}
             >
               <Users size={18} strokeWidth={1.75} />
-              <span>Teams</span>
+              <span>Équipes</span>
             </Link>
 
             <Link
@@ -195,7 +195,7 @@ export const Navbar: React.FC<NavbarProps> = ({ title, backHref, hideBottomNav }
               }`}
             >
               <UserIcon size={18} strokeWidth={1.75} />
-              <span>Profile</span>
+              <span>Profil</span>
             </Link>
           </div>
 
@@ -207,7 +207,7 @@ export const Navbar: React.FC<NavbarProps> = ({ title, backHref, hideBottomNav }
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-[8px] text-[14px] font-medium text-danger hover:bg-danger-tint transition-colors cursor-pointer"
             >
               <LogOut size={18} strokeWidth={1.75} />
-              <span>Sign out</span>
+              <span>Déconnexion</span>
             </button>
           </div>
         </aside>
@@ -217,7 +217,7 @@ export const Navbar: React.FC<NavbarProps> = ({ title, backHref, hideBottomNav }
       {!shouldHideBottomNav && (
         <nav
           className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-surface border-t border-line flex items-center justify-around z-40"
-          aria-label="Mobile Bottom Navigation"
+          aria-label="Navigation Mobile"
         >
           {isAdmin ? (
             <>
@@ -247,7 +247,7 @@ export const Navbar: React.FC<NavbarProps> = ({ title, backHref, hideBottomNav }
                 }`}
               >
                 <MoreHorizontal size={20} strokeWidth={1.75} />
-                <span className="mt-1">More</span>
+                <span className="mt-1">Plus</span>
               </button>
             </>
           ) : (
@@ -282,7 +282,7 @@ export const Navbar: React.FC<NavbarProps> = ({ title, backHref, hideBottomNav }
         <Modal
           isOpen={isMoreOpen}
           onClose={() => setIsMoreOpen(false)}
-          title="More options"
+          title="Plus d'options"
         >
           <div className="flex flex-col py-2 divide-y divide-line">
             <Link
@@ -292,7 +292,7 @@ export const Navbar: React.FC<NavbarProps> = ({ title, backHref, hideBottomNav }
             >
               <div className="flex items-center gap-3">
                 <Users size={20} strokeWidth={1.75} className="text-ink-muted" />
-                <span className="text-[15px] font-medium">Teams</span>
+                <span className="text-[15px] font-medium">Équipes</span>
               </div>
               <ChevronRight size={18} strokeWidth={1.75} className="text-ink-muted" />
             </Link>
@@ -304,7 +304,7 @@ export const Navbar: React.FC<NavbarProps> = ({ title, backHref, hideBottomNav }
             >
               <div className="flex items-center gap-3">
                 <Layers size={20} strokeWidth={1.75} className="text-ink-muted" />
-                <span className="text-[15px] font-medium">Dashboard</span>
+                <span className="text-[15px] font-medium">Tableau de bord</span>
               </div>
               <ChevronRight size={18} strokeWidth={1.75} className="text-ink-muted" />
             </Link>
@@ -316,7 +316,7 @@ export const Navbar: React.FC<NavbarProps> = ({ title, backHref, hideBottomNav }
             >
               <div className="flex items-center gap-3">
                 <UserIcon size={20} strokeWidth={1.75} className="text-ink-muted" />
-                <span className="text-[15px] font-medium">Profile</span>
+                <span className="text-[15px] font-medium">Profil</span>
               </div>
               <ChevronRight size={18} strokeWidth={1.75} className="text-ink-muted" />
             </Link>
@@ -330,7 +330,7 @@ export const Navbar: React.FC<NavbarProps> = ({ title, backHref, hideBottomNav }
               className="py-3.5 flex items-center gap-3 text-danger hover:opacity-80 transition-opacity text-left cursor-pointer"
             >
               <LogOut size={20} strokeWidth={1.75} />
-              <span className="text-[15px] font-medium">Sign out</span>
+              <span className="text-[15px] font-medium">Déconnexion</span>
             </button>
           </div>
         </Modal>

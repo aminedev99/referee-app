@@ -31,6 +31,8 @@ export default function AdminMatchesPage() {
     queryFn: () => api.getMatches(),
   });
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+
   const filteredMatches = matches.filter((m) => {
     const q = search.toLowerCase();
     const matchesSearch =
@@ -43,33 +45,33 @@ export default function AdminMatchesPage() {
     if (!matchesSearch) return false;
 
     if (filter === "upcoming") {
-      return m.id !== "match-past-1";
+      return m.date >= todayStr;
     }
     if (filter === "past") {
-      return m.id === "match-past-1";
+      return m.date < todayStr;
     }
     return true;
   });
 
   return (
     <>
-      <Navbar title="Matches" />
+      <Navbar title="Matchs" />
 
       <main className="max-w-4xl mx-auto w-full px-4 md:px-6 pt-4 flex flex-col gap-4">
         {/* Header bar on desktop */}
         <div className="hidden md:flex items-center justify-between">
-          <h2 className="text-[22px] font-bold text-ink">Matches</h2>
+          <h2 className="text-[22px] font-bold text-ink">Matchs</h2>
           <Link href="/admin/matches/new">
             <Button variant="primary" size="md">
               <Plus size={16} strokeWidth={1.75} className="mr-1.5" />
-              New match
+              Nouveau match
             </Button>
           </Link>
         </div>
 
         {/* Search bar */}
         <Input
-          placeholder="Search team or city"
+          placeholder="Rechercher une équipe ou une ville..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           leftIcon={<Search size={18} strokeWidth={1.75} />}
@@ -78,9 +80,9 @@ export default function AdminMatchesPage() {
         {/* Filter Pills */}
         <Tabs
           items={[
-            { id: "all", label: "All" },
-            { id: "upcoming", label: "Upcoming" },
-            { id: "past", label: "Past" },
+            { id: "all", label: "Tous" },
+            { id: "upcoming", label: "À venir" },
+            { id: "past", label: "Passés" },
           ]}
           activeId={filter}
           onChange={(id) => setFilter(id as "all" | "upcoming" | "past")}
@@ -94,8 +96,8 @@ export default function AdminMatchesPage() {
           <ErrorState onRetry={() => refetch()} />
         ) : filteredMatches.length === 0 ? (
           <EmptyState
-            message="No matches found"
-            actionLabel="Create match"
+            message="Aucun match trouvé"
+            actionLabel="Créer un match"
             onAction={() => router.push("/admin/matches/new")}
           />
         ) : (
@@ -116,11 +118,11 @@ export default function AdminMatchesPage() {
               <table className="w-full text-left border-collapse text-[14px]">
                 <thead>
                   <tr className="border-b border-line bg-canvas/60 text-ink-muted text-[12px] font-semibold uppercase tracking-wider">
-                    <th className="py-3 px-4">Date & Time</th>
+                    <th className="py-3 px-4">Date et Heure</th>
                     <th className="py-3 px-4">Match</th>
-                    <th className="py-3 px-4">Venue</th>
-                    <th className="py-3 px-4">Tags</th>
-                    <th className="py-3 px-4">Referees</th>
+                    <th className="py-3 px-4">Salle</th>
+                    <th className="py-3 px-4">Catégorie</th>
+                    <th className="py-3 px-4">Arbitres</th>
                     <th className="py-3 px-4 text-right">Action</th>
                   </tr>
                 </thead>
@@ -143,12 +145,12 @@ export default function AdminMatchesPage() {
                         </div>
                       </td>
                       <td className="py-3 px-4 text-ink-muted whitespace-nowrap">
-                        {m.assignments?.length || 0} assigned
+                        {m.assignments?.length || 0} désigné(s)
                       </td>
                       <td className="py-3 px-4 text-right whitespace-nowrap">
                         <Link href={`/admin/matches/${m.id}`}>
                           <Button variant="secondary" size="md" className="h-8 px-3 text-[12px]">
-                            Edit
+                            Détails
                           </Button>
                         </Link>
                       </td>
@@ -164,7 +166,7 @@ export default function AdminMatchesPage() {
         <Link
           href="/admin/matches/new"
           className="md:hidden fixed bottom-20 right-5 z-30 w-14 h-14 rounded-full bg-brand text-surface flex items-center justify-center shadow-lg active:scale-95 transition-transform"
-          aria-label="New match"
+          aria-label="Nouveau match"
         >
           <Plus size={28} strokeWidth={2.5} />
         </Link>

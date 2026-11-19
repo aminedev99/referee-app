@@ -19,6 +19,14 @@ export interface AssignmentCardProps {
   isRefusing?: boolean;
 }
 
+const functionTranslations: Record<string, string> = {
+  "Main referee": "Arbitre principal",
+  "Second referee": "Second arbitre",
+  "Scorer": "Marqueur",
+  "Timekeeper": "Chronométreur",
+  "24s operator": "Opérateur 24s",
+};
+
 export const AssignmentCard: React.FC<AssignmentCardProps> = ({
   assignment,
   isRefereeView = true,
@@ -32,15 +40,15 @@ export const AssignmentCard: React.FC<AssignmentCardProps> = ({
   const match = assignment.match;
   const isCancelled = match?.status === "cancelled";
 
-  // Format date
+  // Format date in French
   let formattedDate = "";
   if (match) {
     try {
       const d = new Date(`${match.date}T${match.time || "00:00"}`);
       if (!isNaN(d.getTime())) {
-        const dayName = d.toLocaleDateString("en-GB", { weekday: "short" });
-        const dayNum = d.toLocaleDateString("en-GB", { day: "numeric" });
-        const month = d.toLocaleDateString("en-GB", { month: "short" });
+        const dayName = d.toLocaleDateString("fr-FR", { weekday: "short" });
+        const dayNum = d.toLocaleDateString("fr-FR", { day: "numeric" });
+        const month = d.toLocaleDateString("fr-FR", { month: "short" });
         formattedDate = `${dayName} ${dayNum} ${month}, ${match.time}`;
       }
     } catch {
@@ -49,13 +57,15 @@ export const AssignmentCard: React.FC<AssignmentCardProps> = ({
   }
 
   // Initials for avatar
-  const refName = assignment.referee?.name || "Referee";
+  const refName = assignment.referee?.name || "Arbitre";
   const initials = refName
     .split(" ")
     .map((n) => n[0])
     .join("")
     .slice(0, 2)
     .toUpperCase();
+
+  const translatedFunction = functionTranslations[assignment.referee_function] || assignment.referee_function;
 
   if (!isRefereeView) {
     // Admin Assignment Card
@@ -71,21 +81,21 @@ export const AssignmentCard: React.FC<AssignmentCardProps> = ({
                 {refName}
               </p>
               <p className="text-[12px] text-ink-muted">
-                {assignment.referee_function}
+                {translatedFunction}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-1.5">
             {isCancelled ? (
               <span className="px-2 py-0.5 rounded-full text-[12px] font-semibold bg-gray-100 text-gray-600 border border-gray-200">
-                Cancelled
+                Annulé
               </span>
             ) : (
               <StatusBadge status={assignment.status} />
             )}
             {assignment.needs_attention && (
               <span className="px-1.5 py-0.5 rounded text-[11px] font-bold bg-danger/10 text-danger border border-danger/20">
-                No answer
+                Sans réponse
               </span>
             )}
           </div>
@@ -107,7 +117,7 @@ export const AssignmentCard: React.FC<AssignmentCardProps> = ({
 
         {assignment.status === "refused" && assignment.refusal_reason && (
           <div className="bg-[#FDECEC] border border-danger/20 rounded-[8px] p-2 text-[12px] text-danger">
-            Reason: {assignment.refusal_reason}
+            Motif : {assignment.refusal_reason}
           </div>
         )}
 
@@ -121,7 +131,7 @@ export const AssignmentCard: React.FC<AssignmentCardProps> = ({
                 className="flex-1 text-[13px]"
               >
                 <FileText size={15} strokeWidth={1.75} className="mr-1.5" />
-                Generate receipt
+                Générer le reçu
               </Button>
             ) : (
               <Button
@@ -131,7 +141,7 @@ export const AssignmentCard: React.FC<AssignmentCardProps> = ({
                 className="flex-1 text-[13px]"
               >
                 <Download size={15} strokeWidth={1.75} className="mr-1.5" />
-                Download PDF
+                Télécharger le PDF
               </Button>
             )}
           </div>
@@ -150,7 +160,7 @@ export const AssignmentCard: React.FC<AssignmentCardProps> = ({
         <div className="flex items-center gap-1.5">
           {isCancelled ? (
             <span className="px-2 py-0.5 rounded-full text-[12px] font-semibold bg-gray-100 text-gray-600 border border-gray-200">
-              Cancelled
+              Annulé
             </span>
           ) : (
             <StatusBadge status={assignment.status} />
@@ -184,7 +194,7 @@ export const AssignmentCard: React.FC<AssignmentCardProps> = ({
 
       <div className="flex items-center justify-between pt-2 border-t border-line">
         <span className="text-[13px] text-ink-muted font-medium">
-          {assignment.referee_function}
+          {translatedFunction}
         </span>
         <span className="text-[16px] font-bold text-ink">
           {assignment.indemnity} MAD
@@ -200,7 +210,7 @@ export const AssignmentCard: React.FC<AssignmentCardProps> = ({
             onClick={() => onRefuse?.(assignment.id)}
             disabled={isRefusing || isConfirming}
           >
-            Refuse
+            Refuser
           </Button>
           <Button
             variant="primary"
@@ -210,7 +220,7 @@ export const AssignmentCard: React.FC<AssignmentCardProps> = ({
             loading={isConfirming}
             disabled={isRefusing}
           >
-            Confirm
+            Confirmer
           </Button>
         </div>
       )}

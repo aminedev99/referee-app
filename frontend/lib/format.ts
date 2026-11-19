@@ -5,7 +5,7 @@
  */
 export function formatPhone(phone?: string | null): string {
   if (!phone || !phone.trim()) {
-    return "Not provided";
+    return "Non renseigné";
   }
 
   let cleaned = phone.replace(/[\s\-\.\(\)]+/g, "").trim();

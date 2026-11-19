@@ -27,6 +27,14 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/Toast";
 
+const functionTranslations: Record<string, string> = {
+  "Main referee": "Arbitre principal",
+  "Second referee": "Second arbitre",
+  "Scorer": "Marqueur",
+  "Timekeeper": "Chronométreur",
+  "24s operator": "Opérateur 24s",
+};
+
 export default function AdminMatchDetailPage() {
   const params = useParams<{ id: string }>();
   const queryClient = useQueryClient();
@@ -48,58 +56,58 @@ export default function AdminMatchDetailPage() {
   const cancelMatchMutation = useMutation({
     mutationFn: () => api.cancelMatch(params.id),
     onSuccess: () => {
-      toast.success("Match has been cancelled");
+      toast.success("Le match a été annulé");
       setShowCancelConfirm(false);
       queryClient.invalidateQueries({ queryKey: ["admin-match", params.id] });
       queryClient.invalidateQueries({ queryKey: ["admin-matches"] });
       queryClient.invalidateQueries({ queryKey: ["admin-assignments"] });
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to cancel match");
+      toast.error(err.message || "Échec de l'annulation du match");
     },
   });
 
   const remindMutation = useMutation({
     mutationFn: (asgId: string) => api.remindAssignment(asgId),
     onSuccess: () => {
-      toast.success("Reminder sent to referee");
+      toast.success("Rappel envoyé à l'arbitre");
       queryClient.invalidateQueries({ queryKey: ["admin-match", params.id] });
       queryClient.invalidateQueries({ queryKey: ["admin-assignments"] });
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to send reminder");
+      toast.error(err.message || "Échec de l'envoi du rappel");
     },
   });
 
   const deleteAsgMutation = useMutation({
     mutationFn: (asgId: string) => api.deleteAssignment(asgId),
     onSuccess: () => {
-      toast.success("Assignment removed");
+      toast.success("Désignation supprimée");
       setAssignmentToDelete(null);
       queryClient.invalidateQueries({ queryKey: ["admin-match", params.id] });
       queryClient.invalidateQueries({ queryKey: ["admin-assignments"] });
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to remove assignment");
+      toast.error(err.message || "Échec de la suppression de la désignation");
     },
   });
 
   const generateReceiptMutation = useMutation({
     mutationFn: (asgId: string) => api.createReceipt(asgId),
     onSuccess: () => {
-      toast.success("Receipt generated successfully");
+      toast.success("Reçu généré avec succès");
       queryClient.invalidateQueries({ queryKey: ["admin-match", params.id] });
       queryClient.invalidateQueries({ queryKey: ["admin-assignments"] });
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to generate receipt");
+      toast.error(err.message || "Échec de la génération du reçu");
     },
   });
 
   if (isLoading) {
     return (
       <>
-        <Navbar title="Match details" backHref="/admin/matches" />
+        <Navbar title="Détails du match" backHref="/admin/matches" />
         <main className="max-w-2xl mx-auto w-full p-4 flex flex-col gap-4">
           <Skeleton className="h-32 w-full rounded-[12px]" />
           <Skeleton className="h-40 w-full rounded-[12px]" />
@@ -111,9 +119,9 @@ export default function AdminMatchDetailPage() {
   if (isError || !match) {
     return (
       <>
-        <Navbar title="Match details" backHref="/admin/matches" />
+        <Navbar title="Détails du match" backHref="/admin/matches" />
         <main className="max-w-2xl mx-auto w-full p-4">
-          <ErrorState message="Could not load match details" onRetry={() => refetch()} />
+          <ErrorState message="Impossible de charger les détails du match" onRetry={() => refetch()} />
         </main>
       </>
     );
@@ -135,7 +143,7 @@ export default function AdminMatchDetailPage() {
             </span>
             {isCancelled && (
               <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-line text-ink-muted border border-line">
-                Cancelled
+                Annulé
               </span>
             )}
           </div>
@@ -145,7 +153,7 @@ export default function AdminMatchDetailPage() {
               <Link href={`/admin/matches/${match.id}/edit`}>
                 <Button variant="secondary" size="md">
                   <Edit2 size={14} strokeWidth={1.75} className="mr-1.5" />
-                  Edit
+                  Modifier
                 </Button>
               </Link>
               <Button
@@ -155,7 +163,7 @@ export default function AdminMatchDetailPage() {
                 onClick={() => setShowCancelConfirm(true)}
               >
                 <XCircle size={14} strokeWidth={1.75} className="mr-1.5" />
-                Cancel match
+                Annuler le match
               </Button>
             </div>
           )}
@@ -169,7 +177,7 @@ export default function AdminMatchDetailPage() {
                 {match.home_team.name} vs {match.away_team.name}
               </h2>
               <span className="text-[13px] text-ink-muted mt-0.5">
-                {match.division} • {match.category}
+                {match.division} • {match.category === "Men" ? "Hommes" : match.category === "Women" ? "Femmes" : match.category}
               </span>
             </div>
           </div>
@@ -197,21 +205,22 @@ export default function AdminMatchDetailPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-brand" />
-              <h3 className="text-[17px] font-semibold text-ink">Assigned Officials</h3>
+              <h3 className="text-[17px] font-semibold text-ink">Officiels désignés</h3>
             </div>
             <span className="text-[12px] font-semibold bg-canvas text-ink-muted px-2 py-0.5 rounded-full">
-              {assignments.length} assigned
+              {assignments.length} désigné(s)
             </span>
           </div>
 
           <div className="flex flex-col gap-3">
             {assignments.length === 0 ? (
               <Card className="p-6 text-center text-ink-muted text-[14px]">
-                No referees assigned to this match.
+                Aucun arbitre désigné pour ce match.
               </Card>
             ) : (
               assignments.map((asg) => {
                 const hasReceipt = Boolean(asg.receipt);
+                const translatedFn = functionTranslations[asg.referee_function] || asg.referee_function;
 
                 return (
                   <Card key={asg.id} className="p-4 flex flex-col gap-3">
@@ -222,7 +231,7 @@ export default function AdminMatchDetailPage() {
                             href={`/admin/referees/${asg.referee_id}`}
                             className="text-[15px] font-bold text-ink hover:text-brand transition-colors truncate"
                           >
-                            {asg.referee?.name || "Official"}
+                            {asg.referee?.name || "Officiel"}
                           </Link>
                           {asg.referee?.license_number && (
                             <span className="text-[12px] text-ink-muted">
@@ -231,7 +240,7 @@ export default function AdminMatchDetailPage() {
                           )}
                         </div>
                         <div className="text-[13px] text-ink-muted mt-0.5">
-                          {asg.referee_function} • Paid by {asg.paying_team?.name}
+                          {translatedFn} • Pris en charge par {asg.paying_team?.name}
                         </div>
                       </div>
 
@@ -239,7 +248,7 @@ export default function AdminMatchDetailPage() {
                         <div className="flex items-center gap-1.5">
                           {asg.needs_attention && (
                             <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-danger-tint text-danger border border-danger/20 animate-pulse">
-                              No answer
+                              Sans réponse
                             </span>
                           )}
                           <StatusBadge status={asg.status} />
@@ -254,7 +263,7 @@ export default function AdminMatchDetailPage() {
                     {asg.status === "refused" && asg.refusal_reason && (
                       <div className="p-2.5 bg-danger-tint/50 border border-danger/20 rounded-[8px] text-[12px] text-danger flex items-start gap-1.5">
                         <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-                        <span>Reason: {asg.refusal_reason}</span>
+                        <span>Motif : {asg.refusal_reason}</span>
                       </div>
                     )}
 
@@ -270,7 +279,7 @@ export default function AdminMatchDetailPage() {
                             onClick={() => remindMutation.mutate(asg.id)}
                           >
                             <Bell size={13} strokeWidth={1.75} className="mr-1" />
-                            Remind
+                            Rappeler
                           </Button>
                         )}
 
@@ -283,7 +292,7 @@ export default function AdminMatchDetailPage() {
                             onClick={() => setAssignmentToDelete(asg)}
                           >
                             <Trash2 size={13} strokeWidth={1.75} className="mr-1" />
-                            Remove
+                            Supprimer
                           </Button>
                         )}
 
@@ -296,7 +305,7 @@ export default function AdminMatchDetailPage() {
                             onClick={() => generateReceiptMutation.mutate(asg.id)}
                           >
                             <FileText size={13} strokeWidth={1.75} className="mr-1" />
-                            Generate receipt
+                            Générer le reçu
                           </Button>
                         )}
 
@@ -313,7 +322,7 @@ export default function AdminMatchDetailPage() {
                             }
                           >
                             <Download size={13} strokeWidth={1.75} className="mr-1" />
-                            Download receipt ({asg.receipt?.number || asg.receipt?.receipt_number})
+                            Télécharger le reçu ({asg.receipt?.number || asg.receipt?.receipt_number})
                           </Button>
                         )}
                       </div>
@@ -333,9 +342,9 @@ export default function AdminMatchDetailPage() {
         onConfirm={async () => {
           await cancelMatchMutation.mutateAsync();
         }}
-        title="Cancel this match?"
-        subtitle="All assigned referees will be notified and assignments will become read-only."
-        confirmLabel="Yes, cancel match"
+        title="Annuler ce match ?"
+        subtitle="Tous les arbitres désignés seront informés et les désignations seront verrouillées."
+        confirmLabel="Oui, annuler le match"
         isDestructive={true}
         isLoading={cancelMatchMutation.isPending}
       />
@@ -349,9 +358,9 @@ export default function AdminMatchDetailPage() {
             await deleteAsgMutation.mutateAsync(assignmentToDelete.id);
           }
         }}
-        title="Remove referee assignment?"
-        subtitle={`This will cancel ${assignmentToDelete?.referee?.name}'s invitation for this match.`}
-        confirmLabel="Remove assignment"
+        title="Supprimer la désignation ?"
+        subtitle={`Cela annulera la convocation de ${assignmentToDelete?.referee?.name} pour ce match.`}
+        confirmLabel="Supprimer la désignation"
         isDestructive={true}
         isLoading={deleteAsgMutation.isPending}
       />

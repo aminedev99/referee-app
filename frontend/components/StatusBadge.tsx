@@ -14,9 +14,9 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   className = "",
 }) => {
   const labelMap: Record<AssignmentStatus, string> = {
-    pending: "Pending",
-    confirmed: "Confirmed",
-    refused: "Refused",
+    pending: "En attente",
+    confirmed: "Confirmé",
+    refused: "Refusé",
   };
 
   return (
@@ -41,9 +41,10 @@ export const CategoryBadge: React.FC<{
   category: string;
   className?: string;
 }> = ({ category, className = "" }) => {
+  const translatedCategory = category === "Men" ? "Hommes" : category === "Women" ? "Femmes" : category;
   return (
     <Badge variant="outline" className={`text-[11px] font-medium ${className}`}>
-      {category}
+      {translatedCategory}
     </Badge>
   );
 };

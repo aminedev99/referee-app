@@ -27,6 +27,7 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     role = Column(String(50), nullable=False, default="referee") # "admin" | "referee"
     is_active = Column(Boolean, default=True, nullable=False)
+    password_changed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=get_utc_now)
 
     referee = relationship("Referee", back_populates="user", uselist=False, cascade="all, delete-orphan")

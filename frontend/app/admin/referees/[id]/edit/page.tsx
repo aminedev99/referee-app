@@ -40,25 +40,25 @@ function RefereeEditForm({ referee }: { referee: Referee }) {
   const updateMutation = useMutation({
     mutationFn: (input: UpdateRefereeInput) => api.updateReferee(referee.id, input),
     onSuccess: () => {
-      toast.success("Referee details updated successfully");
+      toast.success("Coordonnées de l'arbitre mises à jour");
       queryClient.invalidateQueries({ queryKey: ["admin-referees"] });
       queryClient.invalidateQueries({ queryKey: ["admin-referee", referee.id] });
       router.push(`/admin/referees/${referee.id}`);
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to update referee");
+      toast.error(err.message || "Échec de la mise à jour de l'arbitre");
     },
   });
 
   const resetPasswordMutation = useMutation({
     mutationFn: (pwd: string) => api.resetRefereePassword(referee.id, pwd),
     onSuccess: () => {
-      toast.success("Password reset successfully");
+      toast.success("Mot de passe réinitialisé avec succès");
       setShowResetModal(false);
       setNewPassword("");
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to reset password");
+      toast.error(err.message || "Échec de la réinitialisation du mot de passe");
     },
   });
 
@@ -67,32 +67,32 @@ function RefereeEditForm({ referee }: { referee: Referee }) {
     onSuccess: () => {
       const nextActive = !isActive;
       setIsActive(nextActive);
-      toast.success(nextActive ? "Referee activated" : "Referee deactivated");
+      toast.success(nextActive ? "Arbitre activé" : "Arbitre désactivé");
       setShowToggleActiveConfirm(false);
       queryClient.invalidateQueries({ queryKey: ["admin-referees"] });
       queryClient.invalidateQueries({ queryKey: ["admin-referee", referee.id] });
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Action failed");
+      toast.error(err.message || "L'action a échoué");
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: () => api.deleteReferee(referee.id),
     onSuccess: () => {
-      toast.success("Referee deleted");
+      toast.success("Arbitre supprimé");
       queryClient.invalidateQueries({ queryKey: ["admin-referees"] });
       router.push("/admin/referees");
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to delete referee");
+      toast.error(err.message || "Échec de la suppression de l'arbitre");
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim() || !email.trim() || !phone.trim() || !license.trim()) {
-      toast.error("Please fill in all required fields");
+      toast.error("Veuillez remplir tous les champs obligatoires");
       return;
     }
     updateMutation.mutate({
@@ -113,24 +113,24 @@ function RefereeEditForm({ referee }: { referee: Referee }) {
           {/* Main Referee Form Card */}
           <Card className="p-4 md:p-6 flex flex-col gap-4">
             <h3 className="text-[16px] font-semibold text-ink border-b border-line pb-3">
-              Official Details
+              Coordonnées de l'officiel
             </h3>
 
-            <Field label="Full name" htmlFor="ref-name" required>
+            <Field label="Nom complet" htmlFor="ref-name" required>
               <Input
                 id="ref-name"
-                placeholder="e.g. Youssef El Amrani"
+                placeholder="ex. Nom et Prénom"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 required
               />
             </Field>
 
-            <Field label="Email address" htmlFor="ref-email" required>
+            <Field label="Adresse email" htmlFor="ref-email" required>
               <Input
                 id="ref-email"
                 type="email"
-                placeholder="e.g. y.elamrani@mail.ma"
+                placeholder="ex. arbitre@domaine.ma"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -138,22 +138,22 @@ function RefereeEditForm({ referee }: { referee: Referee }) {
             </Field>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Phone number" htmlFor="ref-phone" required>
+              <Field label="Numéro de téléphone" htmlFor="ref-phone" required>
                 <Input
                   id="ref-phone"
                   type="tel"
                   inputMode="tel"
-                  placeholder="e.g. 06 12 34 56 78"
+                  placeholder="ex. 06XXXXXXXX"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   required
                 />
               </Field>
 
-              <Field label="License number" htmlFor="ref-license" required>
+              <Field label="Numéro de licence" htmlFor="ref-license" required>
                 <Input
                   id="ref-license"
-                  placeholder="e.g. 1104"
+                  placeholder="ex. 1234"
                   value={license}
                   onChange={(e) => setLicense(e.target.value)}
                   required
@@ -164,9 +164,9 @@ function RefereeEditForm({ referee }: { referee: Referee }) {
             {/* Active Toggle Switch */}
             <div className="flex items-center justify-between pt-2 border-t border-line">
               <div className="flex flex-col">
-                <span className="text-[14px] font-semibold text-ink">Active Status</span>
+                <span className="text-[14px] font-semibold text-ink">Statut actif</span>
                 <span className="text-[12px] text-ink-muted">
-                  Inactive referees cannot log in and are excluded from the match assignment picker.
+                  Les arbitres inactifs ne peuvent pas se connecter et sont exclus de la sélection des matchs.
                 </span>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -184,13 +184,13 @@ function RefereeEditForm({ referee }: { referee: Referee }) {
           {/* Account Security Card */}
           <Card className="p-4 md:p-6 flex flex-col gap-3">
             <h3 className="text-[16px] font-semibold text-ink border-b border-line pb-3">
-              Account Security
+              Sécurité du compte
             </h3>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[14px] font-medium text-ink">Reset password</p>
+                <p className="text-[14px] font-medium text-ink">Réinitialiser le mot de passe</p>
                 <p className="text-[12px] text-ink-muted">
-                  Issue a new temporary password for this referee
+                  Définir un nouveau mot de passe pour cet arbitre
                 </p>
               </div>
               <Button
@@ -203,7 +203,7 @@ function RefereeEditForm({ referee }: { referee: Referee }) {
                 }}
               >
                 <KeyRound size={15} strokeWidth={1.75} className="mr-1.5" />
-                Reset password
+                Réinitialiser le mot de passe
               </Button>
             </div>
           </Card>
@@ -211,18 +211,18 @@ function RefereeEditForm({ referee }: { referee: Referee }) {
           {/* Danger Zone Card */}
           <Card className="p-4 md:p-6 border-danger/30 bg-danger-tint/10 flex flex-col gap-4">
             <h3 className="text-[16px] font-semibold text-danger border-b border-danger/20 pb-3">
-              Danger Zone
+              Zone de danger
             </h3>
 
             <div className="flex items-start justify-between gap-4 border-b border-danger/10 pb-4">
               <div className="flex flex-col">
                 <span className="text-[14px] font-semibold text-ink">
-                  {isActive ? "Deactivate referee" : "Activate referee"}
+                  {isActive ? "Désactiver l'arbitre" : "Activer l'arbitre"}
                 </span>
                 <span className="text-[12px] text-ink-muted">
                   {isActive
-                    ? "Blocks login and excludes from match pickers while preserving match history."
-                    : "Reactivates account and allows new assignments."}
+                    ? "Bloque la connexion et l'exclut des désignations tout en conservant l'historique."
+                    : "Réactive le compte et autorise de nouvelles désignations."}
                 </span>
               </div>
               <Button
@@ -235,12 +235,12 @@ function RefereeEditForm({ referee }: { referee: Referee }) {
                 {isActive ? (
                   <>
                     <UserX size={14} className="mr-1" />
-                    Deactivate
+                    Désactiver
                   </>
                 ) : (
                   <>
                     <UserCheck size={14} className="mr-1" />
-                    Activate
+                    Activer
                   </>
                 )}
               </Button>
@@ -248,13 +248,13 @@ function RefereeEditForm({ referee }: { referee: Referee }) {
 
             <div className="flex items-start justify-between gap-4">
               <div className="flex flex-col">
-                <span className="text-[14px] font-semibold text-ink">Delete referee</span>
+                <span className="text-[14px] font-semibold text-ink">Supprimer l'arbitre</span>
                 <span className="text-[12px] text-ink-muted">
-                  Permanently remove official. Only possible if the referee has zero assignments.
+                  Supprimer définitivement l'arbitre. Possible uniquement s'il n'a aucune désignation.
                 </span>
                 {hasAssignments && (
                   <span className="text-[12px] text-danger font-medium mt-1">
-                    Referee has assignments, deactivate instead.
+                    L'arbitre a des désignations, désactivez-le à la place.
                   </span>
                 )}
               </div>
@@ -267,7 +267,7 @@ function RefereeEditForm({ referee }: { referee: Referee }) {
                 onClick={() => setShowDeleteConfirm(true)}
               >
                 <Trash2 size={14} className="mr-1" />
-                Delete
+                Supprimer
               </Button>
             </div>
           </Card>
@@ -281,7 +281,7 @@ function RefereeEditForm({ referee }: { referee: Referee }) {
               className="flex-1"
               onClick={() => router.back()}
             >
-              Cancel
+              Annuler
             </Button>
             <Button
               type="submit"
@@ -290,7 +290,7 @@ function RefereeEditForm({ referee }: { referee: Referee }) {
               className="flex-1"
               loading={updateMutation.isPending}
             >
-              Save changes
+              Enregistrer les modifications
             </Button>
           </div>
         </form>
@@ -300,11 +300,11 @@ function RefereeEditForm({ referee }: { referee: Referee }) {
       <Modal
         isOpen={showResetModal}
         onClose={() => setShowResetModal(false)}
-        title="Reset referee password"
-        subtitle={`Set a new temporary password for ${referee.name}`}
+        title="Réinitialiser le mot de passe"
+        subtitle={`Définir un mot de passe temporaire pour ${referee.name}`}
       >
         <div className="flex flex-col gap-4">
-          <Field label="New password (min 8 chars)" htmlFor="new-pw" required>
+          <Field label="Nouveau mot de passe (min 8 car.)" htmlFor="new-pw" required>
             <Input
               id="new-pw"
               type={showPasswordText ? "text" : "password"}
@@ -332,7 +332,7 @@ function RefereeEditForm({ referee }: { referee: Referee }) {
               disabled={newPassword.length < 8}
               onClick={() => resetPasswordMutation.mutate(newPassword)}
             >
-              Update password
+              Mettre à jour le mot de passe
             </Button>
             <Button
               variant="ghost"
@@ -341,7 +341,7 @@ function RefereeEditForm({ referee }: { referee: Referee }) {
               disabled={resetPasswordMutation.isPending}
               onClick={() => setShowResetModal(false)}
             >
-              Cancel
+              Annuler
             </Button>
           </div>
         </div>
@@ -354,13 +354,13 @@ function RefereeEditForm({ referee }: { referee: Referee }) {
         onConfirm={async () => {
           await toggleActiveMutation.mutateAsync();
         }}
-        title={isActive ? "Deactivate this referee?" : "Activate this referee?"}
+        title={isActive ? "Désactiver cet arbitre ?" : "Activer cet arbitre ?"}
         subtitle={
           isActive
-            ? "The referee will no longer be able to log in or be assigned to upcoming matches."
-            : "The referee will be able to log in and receive new match assignments."
+            ? "L'arbitre ne pourra plus se connecter ni être désigné pour les prochains matchs."
+            : "L'arbitre pourra se connecter et recevoir de nouvelles désignations."
         }
-        confirmLabel={isActive ? "Deactivate" : "Activate"}
+        confirmLabel={isActive ? "Désactiver" : "Activer"}
         isDestructive={isActive}
         isLoading={toggleActiveMutation.isPending}
       />
@@ -372,9 +372,9 @@ function RefereeEditForm({ referee }: { referee: Referee }) {
         onConfirm={async () => {
           await deleteMutation.mutateAsync();
         }}
-        title="Permanently delete referee?"
-        subtitle="This action cannot be undone. All referee data will be erased."
-        confirmLabel="Yes, delete referee"
+        title="Supprimer définitivement l'arbitre ?"
+        subtitle="Cette action est irréversible. Toutes les données de l'arbitre seront effacées."
+        confirmLabel="Oui, supprimer l'arbitre"
         isDestructive={true}
         isLoading={deleteMutation.isPending}
       />
@@ -398,7 +398,7 @@ export default function AdminRefereeEditPage() {
   if (isLoading) {
     return (
       <>
-        <Navbar title="Edit referee" backHref={`/admin/referees/${params.id}`} />
+        <Navbar title="Modifier l'arbitre" backHref={`/admin/referees/${params.id}`} />
         <main className="max-w-2xl mx-auto w-full px-4 md:px-6 pt-4 flex flex-col gap-4">
           <Skeleton className="h-48 w-full rounded-[12px]" />
           <Skeleton className="h-32 w-full rounded-[12px]" />
@@ -410,9 +410,9 @@ export default function AdminRefereeEditPage() {
   if (isError || !referee) {
     return (
       <>
-        <Navbar title="Edit referee" backHref="/admin/referees" />
+        <Navbar title="Modifier l'arbitre" backHref="/admin/referees" />
         <main className="max-w-2xl mx-auto w-full px-4 md:px-6 pt-4">
-          <ErrorState message="Could not load referee data" onRetry={() => refetch()} />
+          <ErrorState message="Impossible de charger les données de l'arbitre" onRetry={() => refetch()} />
         </main>
       </>
     );
@@ -420,7 +420,7 @@ export default function AdminRefereeEditPage() {
 
   return (
     <>
-      <Navbar title="Edit referee" backHref={`/admin/referees/${params.id}`} />
+      <Navbar title="Modifier l'arbitre" backHref={`/admin/referees/${params.id}`} />
       <RefereeEditForm key={referee.id} referee={referee} />
     </>
   );

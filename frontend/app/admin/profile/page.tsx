@@ -26,11 +26,11 @@ function AdminProfileContent({ user }: { user: User }) {
   const updateProfileMutation = useMutation({
     mutationFn: (data: { full_name?: string }) => api.updateAuthMe(data),
     onSuccess: async () => {
-      toast.success("Profile updated successfully");
+      toast.success("Profil mis à jour avec succès");
       await refetchUser();
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to update profile");
+      toast.error(err.message || "Échec de la mise à jour du profil");
     },
   });
 
@@ -38,20 +38,20 @@ function AdminProfileContent({ user }: { user: User }) {
     mutationFn: (data: { current_password: string; new_password: string }) =>
       api.changePassword(data),
     onSuccess: () => {
-      toast.success("Password changed successfully");
+      toast.success("Mot de passe modifié avec succès");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to change password");
+      toast.error(err.message || "Échec de la modification du mot de passe");
     },
   });
 
   const handleProfileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
-      toast.error("Name cannot be empty");
+      toast.error("Le nom ne peut pas être vide");
       return;
     }
     updateProfileMutation.mutate({
@@ -62,15 +62,15 @@ function AdminProfileContent({ user }: { user: User }) {
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentPassword) {
-      toast.error("Current password is required");
+      toast.error("Le mot de passe actuel est requis");
       return;
     }
     if (newPassword.length < 8) {
-      toast.error("New password must be at least 8 characters long");
+      toast.error("Le nouveau mot de passe doit contenir au moins 8 caractères");
       return;
     }
     if (newPassword !== confirmPassword) {
-      toast.error("Passwords do not match");
+      toast.error("Les mots de passe ne correspondent pas");
       return;
     }
     changePasswordMutation.mutate({
@@ -95,33 +95,33 @@ function AdminProfileContent({ user }: { user: User }) {
           {initials}
         </div>
         <h1 className="text-[20px] font-bold text-gray-900">{user.name}</h1>
-        <p className="text-[13px] text-gray-500 capitalize">{user.role} Account</p>
+        <p className="text-[13px] text-gray-500">Compte Administrateur</p>
       </div>
 
       {/* Read-Only Account Details */}
       <Card className="p-4 flex flex-col gap-3">
-        <h2 className="text-[14px] font-semibold text-gray-900">Account Details</h2>
+        <h2 className="text-[14px] font-semibold text-gray-900">Détails du compte</h2>
         <div className="flex items-center gap-3 text-[14px] text-gray-600">
           <Mail className="w-4 h-4 text-gray-400 shrink-0" />
           <span className="truncate">{user.email}</span>
           <span className="ml-auto text-[11px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-            Read-only
+            Lecture seule
           </span>
         </div>
       </Card>
 
       {/* Edit Profile Info Form */}
       <Card className="p-4">
-        <h2 className="text-[14px] font-semibold text-gray-900 mb-4">Edit Profile</h2>
+        <h2 className="text-[14px] font-semibold text-gray-900 mb-4">Modifier le profil</h2>
         <form onSubmit={handleProfileSubmit} className="flex flex-col gap-4">
-          <Field label="Full Name" required>
+          <Field label="Nom complet" required>
             <div className="relative">
               <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
                 className="pl-9"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Your full name"
+                placeholder="Votre nom complet"
               />
             </div>
           </Field>
@@ -131,7 +131,7 @@ function AdminProfileContent({ user }: { user: User }) {
             disabled={updateProfileMutation.isPending || !name.trim()}
             className="w-full mt-2"
           >
-            {updateProfileMutation.isPending ? "Saving..." : "Save Changes"}
+            {updateProfileMutation.isPending ? "Enregistrement..." : "Enregistrer les modifications"}
           </Button>
         </form>
       </Card>
@@ -140,10 +140,10 @@ function AdminProfileContent({ user }: { user: User }) {
       <Card className="p-4">
         <div className="flex items-center gap-2 mb-4">
           <KeyRound className="w-4 h-4 text-brand" />
-          <h2 className="text-[14px] font-semibold text-gray-900">Change Password</h2>
+          <h2 className="text-[14px] font-semibold text-gray-900">Changer le mot de passe</h2>
         </div>
         <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-3">
-          <Field label="Current Password" required>
+          <Field label="Mot de passe actuel" required>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
@@ -151,12 +151,12 @@ function AdminProfileContent({ user }: { user: User }) {
                 className="pl-9"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="Enter current password"
+                placeholder="Entrez le mot de passe actuel"
               />
             </div>
           </Field>
 
-          <Field label="New Password (min 8 characters)" required>
+          <Field label="Nouveau mot de passe (min 8 caractères)" required>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
@@ -164,12 +164,12 @@ function AdminProfileContent({ user }: { user: User }) {
                 className="pl-9"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Enter new password"
+                placeholder="Entrez le nouveau mot de passe"
               />
             </div>
           </Field>
 
-          <Field label="Confirm New Password" required>
+          <Field label="Confirmer le nouveau mot de passe" required>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
@@ -177,7 +177,7 @@ function AdminProfileContent({ user }: { user: User }) {
                 className="pl-9"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm new password"
+                placeholder="Confirmez le nouveau mot de passe"
               />
             </div>
           </Field>
@@ -193,7 +193,7 @@ function AdminProfileContent({ user }: { user: User }) {
             }
             className="w-full mt-2"
           >
-            {changePasswordMutation.isPending ? "Updating Password..." : "Update Password"}
+            {changePasswordMutation.isPending ? "Mise à jour..." : "Mettre à jour le mot de passe"}
           </Button>
         </form>
       </Card>
@@ -205,7 +205,7 @@ function AdminProfileContent({ user }: { user: User }) {
         className="w-full text-red-600 border-red-200 hover:bg-red-50 flex items-center justify-center gap-2"
       >
         <LogOut className="w-4 h-4" />
-        Sign Out
+        Déconnexion
       </Button>
     </main>
   );
@@ -217,7 +217,7 @@ export default function AdminProfilePage() {
   if (isAuthLoading || !user) {
     return (
       <>
-        <Navbar title="Admin Profile" />
+        <Navbar title="Profil Administrateur" />
         <main className="max-w-xl mx-auto w-full px-4 pt-6 flex flex-col gap-4">
           <Skeleton className="h-20 w-20 rounded-full mx-auto" />
           <Skeleton className="h-6 w-48 mx-auto" />
@@ -229,7 +229,7 @@ export default function AdminProfilePage() {
 
   return (
     <>
-      <Navbar title="Profile" />
+      <Navbar title="Profil" />
       <AdminProfileContent key={user.id} user={user} />
     </>
   );

@@ -1,10 +1,13 @@
 import os
+import uuid
+import logging
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Optional
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
@@ -14,9 +17,15 @@ from app.migrations import run_migrations
 from app.deps import get_db, get_current_user, require_admin
 from app.models import User, Referee, Team, Match, Assignment, Receipt, Notification
 from app.schemas import UserOut, UserUpdate, ChangePasswordInput, LoginResponse, AdminStatsOut
-from app.security import verify_password, get_password_hash, create_access_token
-from app.services.receipts import generate_receipt_pdf, get_amount_in_words_fr
-from app.services.notifications import notify
+from app.security import (
+    verify_password,
+    verify_dummy_password,
+    get_password_hash,
+    create_access_token,
+    validate_password_strength,
+    COMMON_WEAK_PASSWORDS,
+)
+from app.services.rate_limiter import login_rate_limiter, get_client_ip
 from app.services.phone import normalize_moroccan_phone
 
 # Routers
@@ -30,303 +39,70 @@ from app.routers import (
     notifications,
 )
 
-def seed_database(db: Session) -> None:
-    # 1. Admin Seed
-    admin = db.query(User).filter(User.email == settings.SEED_ADMIN_EMAIL).first()
-    if not admin:
-        admin = User(
-            email=settings.SEED_ADMIN_EMAIL,
-            name="System Admin",
-            hashed_password=get_password_hash(settings.SEED_ADMIN_PASSWORD),
-            role="admin",
-            is_active=True,
-        )
-        db.add(admin)
-        db.commit()
-        db.refresh(admin)
+logger = logging.getLogger("referee_app")
 
-    # Check if teams exist
-    if db.query(Team).count() > 0:
+def bootstrap_admin(db: Session) -> None:
+    """
+    Bootstrap the initial administrator if NO admin exists.
+    If an admin already exists, do nothing (never overwrite or reset password from env).
+    In production, refuses to start if ADMIN_EMAIL/PASSWORD are missing, <12 chars, or weak.
+    """
+    admin_count = db.query(User).filter(User.role == "admin").count()
+    if admin_count > 0:
         return
 
-    print("Seeding initial Moroccan basketball data...")
+    admin_email = (settings.ADMIN_EMAIL or "").strip().lower()
+    admin_password = settings.ADMIN_PASSWORD or ""
+    admin_name = (settings.ADMIN_NAME or "Administrator").strip()
 
-    # 2. Teams
-    teams_data = [
-        {"name": "Wydad AC", "city": "Casablanca"},
-        {"name": "Raja CA", "city": "Casablanca"},
-        {"name": "FUS Rabat", "city": "Rabat"},
-        {"name": "AS Salé", "city": "Salé"},
-        {"name": "IR Tanger", "city": "Tanger"},
-        {"name": "KAC Kénitra", "city": "Kénitra"},
-    ]
-    created_teams: dict[str, Team] = {}
-    for td in teams_data:
-        t = Team(name=td["name"], city=td["city"])
-        db.add(t)
-        created_teams[td["name"]] = t
-    db.flush()
-
-    # 3. Referees (including an inactive referee and real normalized phone numbers & unique licenses)
-    ref_pw = get_password_hash("Referee12345!")
-    referees_data = [
-        {
-            "name": "Youssef El Amrani",
-            "email": "referee@referee.local",
-            "alias_email": "y.elamrani@mail.ma",
-            "phone": "+212661234567",
-            "license": "1104",
-            "category": "National Referee",
-            "is_active": True,
-        },
-        {
-            "name": "Karim Benali",
-            "email": "k.benali@mail.ma",
-            "phone": "+212662345678",
-            "license": "1088",
-            "category": "Regional Referee",
-            "is_active": True,
-        },
-        {
-            "name": "Sara Idrissi",
-            "email": "s.idrissi@mail.ma",
-            "phone": "+212663456789",
-            "license": "1115",
-            "category": "National Referee",
-            "is_active": True,
-        },
-        {
-            "name": "Omar Tazi",
-            "email": "o.tazi@mail.ma",
-            "phone": "+212664567890",
-            "license": "1120",
-            "category": "Regional Referee",
-            "is_active": True,
-        },
-        {
-            "name": "Hassan Mansouri",
-            "email": "h.mansouri@mail.ma",
-            "phone": "+212665123456",
-            "license": "1099",
-            "category": "Regional Referee",
-            "is_active": False,
-        },
-    ]
-    created_refs: dict[str, Referee] = {}
-    for rd in referees_data:
-        u = User(
-            email=rd["email"],
-            name=rd["name"],
-            hashed_password=ref_pw,
-            role="referee",
-            is_active=rd["is_active"],
-        )
-        db.add(u)
-        db.flush()
-
-        ref = Referee(
-            user_id=u.id,
-            name=rd["name"],
-            email=rd.get("alias_email", rd["email"]),
-            phone=rd["phone"],
-            license_number=rd["license"],
-            category=rd["category"],
-            is_active=rd["is_active"],
-        )
-        db.add(ref)
-        created_refs[rd["name"]] = ref
-    db.flush()
-
-    # 4. Matches (including a pending assignment within 24h and a cancelled match)
-    tomorrow_dt = datetime.now() + timedelta(hours=18)
-    tomorrow_date_str = tomorrow_dt.strftime("%Y-%m-%d")
-    tomorrow_time_str = tomorrow_dt.strftime("%H:%M")
-
-    next_week_date_str = (datetime.now() + timedelta(days=6)).strftime("%Y-%m-%d")
-
-    matches_data = [
-        # Upcoming within 24h with pending assignment (needs_attention = True)
-        {
-            "number": "2026-88",
-            "home": "Wydad AC",
-            "away": "Raja CA",
-            "date": tomorrow_date_str,
-            "time": tomorrow_time_str,
-            "city": "Casablanca",
-            "venue": "Salle Mohammed V",
-            "div": "1DV",
-            "cat": "Men",
-            "status": "scheduled",
-            "asgs": [
-                {"ref": "Youssef El Amrani", "fn": "Main referee", "ind": 400.0, "paying": "Wydad AC", "status": "pending"},
-                {"ref": "Karim Benali", "fn": "Second referee", "ind": 300.0, "paying": "Raja CA", "status": "confirmed"},
-            ],
-        },
-        # Upcoming in 6 days
-        {
-            "number": "2026-89",
-            "home": "FUS Rabat",
-            "away": "AS Salé",
-            "date": next_week_date_str,
-            "time": "16:00",
-            "city": "Rabat",
-            "venue": "Salle Moulay Abdallah",
-            "div": "2DV",
-            "cat": "Women",
-            "status": "scheduled",
-            "asgs": [
-                {"ref": "Youssef El Amrani", "fn": "Second referee", "ind": 300.0, "paying": "FUS Rabat", "status": "pending"},
-                {"ref": "Sara Idrissi", "fn": "Main referee", "ind": 400.0, "paying": "AS Salé", "status": "confirmed"},
-            ],
-        },
-        # Cancelled Match
-        {
-            "number": "2026-95",
-            "home": "IR Tanger",
-            "away": "AS Salé",
-            "date": next_week_date_str,
-            "time": "19:00",
-            "city": "Tanger",
-            "venue": "Salle Ziatin",
-            "div": "1DV",
-            "cat": "Men",
-            "status": "cancelled",
-            "asgs": [
-                {"ref": "Karim Benali", "fn": "Main referee", "ind": 400.0, "paying": "IR Tanger", "status": "refused", "reason": "Match cancelled"},
-                {"ref": "Sara Idrissi", "fn": "Second referee", "ind": 350.0, "paying": "AS Salé", "status": "confirmed"},
-            ],
-        },
-        # Past Matches
-        {
-            "number": "2026-75",
-            "home": "Raja CA",
-            "away": "FUS Rabat",
-            "date": "2026-11-15",
-            "time": "17:00",
-            "city": "Casablanca",
-            "venue": "Salle Mohammed V",
-            "div": "1DV",
-            "cat": "Men",
-            "status": "scheduled",
-            "asgs": [
-                {"ref": "Youssef El Amrani", "fn": "Main referee", "ind": 400.0, "paying": "Raja CA", "status": "confirmed", "receipt": True},
-            ],
-        },
-        {
-            "number": "2026-70",
-            "home": "AS Salé",
-            "away": "IR Tanger",
-            "date": "2026-11-08",
-            "time": "18:00",
-            "city": "Salé",
-            "venue": "Salle Fathallah El Bouazzaoui",
-            "div": "1DV",
-            "cat": "Men",
-            "status": "scheduled",
-            "asgs": [
-                {"ref": "Youssef El Amrani", "fn": "Main referee", "ind": 350.0, "paying": "AS Salé", "status": "confirmed", "receipt": True},
-            ],
-        },
-        {
-            "number": "2026-64",
-            "home": "KAC Kénitra",
-            "away": "Wydad AC",
-            "date": "2026-11-01",
-            "time": "16:30",
-            "city": "Kénitra",
-            "venue": "Salle Al Wahda",
-            "div": "2DV",
-            "cat": "Men",
-            "status": "scheduled",
-            "asgs": [
-                {"ref": "Youssef El Amrani", "fn": "Second referee", "ind": 300.0, "paying": "KAC Kénitra", "status": "refused", "reason": "Family emergency"},
-            ],
-        },
-    ]
-
-    receipt_counter = 1
-    for md in matches_data:
-        m = Match(
-            match_number=md["number"],
-            home_team_id=created_teams[md["home"]].id,
-            away_team_id=created_teams[md["away"]].id,
-            date=md["date"],
-            time=md["time"],
-            city=md["city"],
-            venue=md["venue"],
-            division=md["div"],
-            category=md["cat"],
-            status=md["status"],
-            created_by_id=admin.id,
-        )
-        db.add(m)
-        db.flush()
-
-        for ad in md["asgs"]:
-            ref = created_refs[ad["ref"]]
-            paying = created_teams[ad["paying"]]
-            asg = Assignment(
-                match_id=m.id,
-                referee_id=ref.id,
-                referee_function=ad["fn"],
-                indemnity=ad["ind"],
-                paying_team_id=paying.id,
-                status=ad["status"],
-                refusal_reason=ad.get("reason"),
+    if settings.ENV == "production":
+        if not admin_email or "@" not in admin_email:
+            raise RuntimeError(
+                "CRITICAL: Production startup failed: ADMIN_EMAIL must be provided and valid "
+                "when bootstrapping the first admin."
             )
-            db.add(asg)
-            db.flush()
+        if not admin_password or len(admin_password) < 12:
+            raise RuntimeError(
+                "CRITICAL: Production startup failed: ADMIN_PASSWORD must be at least 12 characters "
+                "when bootstrapping the first admin."
+            )
+        if admin_password.lower() in COMMON_WEAK_PASSWORDS:
+            raise RuntimeError(
+                "CRITICAL: Production startup failed: ADMIN_PASSWORD is too common/weak. "
+                "Choose a strong production password."
+            )
+    else:
+        # Development fallback
+        if not admin_email:
+            admin_email = "admin@draarbitre.com"
+        if not admin_password:
+            admin_password = "AdminSecure2026!"
 
-            if ad.get("receipt"):
-                rcpt_num = f"2026-{receipt_counter:04d}"
-                receipt_counter += 1
-                amount_words = get_amount_in_words_fr(ad["ind"])
-                rcpt = Receipt(
-                    assignment_id=asg.id,
-                    receipt_number=rcpt_num,
-                    number=rcpt_num,
-                    issued_at="16 Nov 2026",
-                    amount=float(ad["ind"]),
-                    amount_in_words=amount_words,
-                    pdf_path="",
-                )
-                db.add(rcpt)
-                db.flush()
-                try:
-                    pdf_path = generate_receipt_pdf(
-                        receipt=rcpt,
-                        assignment=asg,
-                        referee=ref,
-                        match=m,
-                        paying_team=paying,
-                    )
-                    rcpt.pdf_path = pdf_path
-                except Exception as ex:
-                    print("Could not generate receipt PDF during seed:", ex)
-
-    # 5. Initial Notifications
-    youssef_ref = created_refs.get("Youssef El Amrani")
-    if youssef_ref and youssef_ref.user_id:
-        notify(db, youssef_ref.user_id, f"Wydad AC vs Raja CA, {tomorrow_date_str}", type="assignment", title="New assignment")
-        notify(db, youssef_ref.user_id, "Raja CA vs FUS Rabat", type="receipt", title="Receipt available")
-
-    notify(db, admin.id, "Karim Benali confirmed Wydad AC vs Raja CA", type="confirmation", title="Karim Benali confirmed")
-
+    logger.info("Bootstrapping initial admin account for %s...", admin_email)
+    admin = User(
+        email=admin_email,
+        name=admin_name,
+        hashed_password=get_password_hash(admin_password),
+        role="admin",
+        is_active=True,
+        password_changed_at=datetime.now(timezone.utc),
+    )
+    db.add(admin)
     db.commit()
-    print("Database successfully seeded.")
+    db.refresh(admin)
+    logger.info("Admin account successfully bootstrapped.")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: create tables, run migrations, and seed
+    # Startup: create tables, run migrations, and bootstrap admin only
     Base.metadata.create_all(bind=engine)
     run_migrations()
     db = SessionLocal()
     try:
-        seed_database(db)
+        bootstrap_admin(db)
     finally:
         db.close()
     yield
-    # Shutdown
 
 docs_url = "/docs" if settings.ENV == "development" else None
 redoc_url = "/redoc" if settings.ENV == "development" else None
@@ -341,14 +117,39 @@ app = FastAPI(
     openapi_url=openapi_url,
 )
 
-# CORS Middleware (permissive for local development)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Global unhandled exception handler to hide stack traces in production
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, HTTPException):
+        headers = getattr(exc, "headers", None)
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=headers,
+        )
+
+    req_id = str(uuid.uuid4())
+    logger.exception("Unhandled error [request_id=%s] on %s %s: %s", req_id, request.method, request.url.path, exc)
+
+    if settings.ENV == "production":
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": "Internal server error", "request_id": req_id},
+        )
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": str(exc), "request_id": req_id},
+    )
+
+# CORS: Only enabled in development mode. In production, Caddy serves frontend and proxies /api on same origin.
+if settings.ENV == "development":
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Health endpoint (public)
 @app.get("/api/health")
@@ -358,10 +159,15 @@ def health():
 # Auth endpoints
 @app.post("/api/auth/login", response_model=LoginResponse)
 def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ) -> LoginResponse:
+    ip = get_client_ip(request)
     identifier = form_data.username.strip().lower()
+
+    # Rate limiting: 5/min per IP+email, 20/hr per IP
+    login_rate_limiter.check_and_record(ip, identifier)
 
     # Find user by email or by referee alias email
     user = (
@@ -376,7 +182,16 @@ def login(
         .first()
     )
 
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    # Constant-time comparison: if user is not found, verify against dummy hash
+    if not user:
+        verify_dummy_password(form_data.password)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -397,7 +212,8 @@ def login(
         phone_val = user.referee.phone
 
     access_token = create_access_token(
-        data={"sub": user.id, "role": user.role, "email": user.email}
+        user_id=user.id,
+        role=user.role,
     )
 
     return LoginResponse(
@@ -481,13 +297,16 @@ def change_password(
             detail="Current password is incorrect",
         )
 
-    if len(pwd_in.new_password) < 8:
+    try:
+        validate_password_strength(pwd_in.new_password, min_length=8)
+    except ValueError as ve:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="New password must be at least 8 characters long",
+            detail=str(ve),
         )
 
     current_user.hashed_password = get_password_hash(pwd_in.new_password)
+    current_user.password_changed_at = datetime.now(timezone.utc)
     db.commit()
     return {"status": "ok", "message": "Password changed successfully"}
 

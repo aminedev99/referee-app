@@ -19,27 +19,21 @@ export function middleware(request: NextRequest) {
   let isExpired = false;
 
   if (token) {
-    if (token === "mock-admin-token") {
-      role = "admin";
-    } else if (token === "mock-referee-token") {
-      role = "referee";
-    } else {
-      try {
-        const parts = token.split(".");
-        if (parts.length === 3) {
-          const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-          // atob works in Next.js Edge Runtime
-          const decoded = JSON.parse(atob(base64));
-          role = decoded.role || null;
-          if (decoded.exp && decoded.exp < Math.floor(Date.now() / 1000)) {
-            isExpired = true;
-          }
-        } else {
+    try {
+      const parts = token.split(".");
+      if (parts.length === 3) {
+        const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+        // atob works in Next.js Edge Runtime
+        const decoded = JSON.parse(atob(base64));
+        role = decoded.role || null;
+        if (decoded.exp && decoded.exp < Math.floor(Date.now() / 1000)) {
           isExpired = true;
         }
-      } catch {
+      } else {
         isExpired = true;
       }
+    } catch {
+      isExpired = true;
     }
   }
 

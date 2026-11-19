@@ -1,25 +1,42 @@
+import re
 from datetime import datetime
-from typing import Optional, List, Any, Union
-from pydantic import BaseModel, ConfigDict, Field, field_serializer
+from typing import Optional, List, Any, Union, Literal
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
-class BaseSchema(BaseModel):
+EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
+
+def clean_and_validate_email(v: Optional[str]) -> Optional[str]:
+    if v is None:
+        return None
+    val = v.strip().lower()
+    if not EMAIL_REGEX.match(val):
+        raise ValueError("Format d'adresse email invalide")
+    return val
+
+class BaseOutSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-class TeamBase(BaseSchema):
+class BaseInSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+# ----------------- TEAMS -----------------
+
+class TeamCreate(BaseInSchema):
+    name: str = Field(..., min_length=1, max_length=100)
+    city: str = Field(..., min_length=1, max_length=100)
+
+class TeamUpdate(BaseInSchema):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    city: Optional[str] = Field(None, min_length=1, max_length=100)
+
+class TeamOut(BaseOutSchema):
+    id: str
     name: str
     city: str
 
-class TeamCreate(TeamBase):
-    pass
+# ----------------- USERS & AUTH -----------------
 
-class TeamUpdate(BaseSchema):
-    name: Optional[str] = None
-    city: Optional[str] = None
-
-class TeamOut(TeamBase):
-    id: str
-
-class UserOut(BaseSchema):
+class UserOut(BaseOutSchema):
     id: str
     email: str
     name: str
@@ -28,25 +45,27 @@ class UserOut(BaseSchema):
     referee_id: Optional[str] = None
     phone: Optional[str] = None
 
-class UserUpdate(BaseSchema):
-    full_name: Optional[str] = None
-    name: Optional[str] = None
-    phone: Optional[str] = None
+class UserUpdate(BaseInSchema):
+    full_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    phone: Optional[str] = Field(None, min_length=6, max_length=30)
 
-class ChangePasswordInput(BaseSchema):
-    current_password: str
-    new_password: str
+class ChangePasswordInput(BaseInSchema):
+    current_password: str = Field(..., min_length=1, max_length=128)
+    new_password: str = Field(..., min_length=8, max_length=128)
 
-class ResetPasswordInput(BaseSchema):
-    password: str
+class ResetPasswordInput(BaseInSchema):
+    password: str = Field(..., min_length=8, max_length=128)
 
-class LoginResponse(BaseSchema):
+class LoginResponse(BaseOutSchema):
     access_token: str
     token_type: str = "bearer"
     role: str
     user: UserOut
 
-class RefereeSummaryOut(BaseSchema):
+# ----------------- REFEREES -----------------
+
+class RefereeSummaryOut(BaseOutSchema):
     id: str
     user_id: Optional[str] = None
     name: str
@@ -63,24 +82,38 @@ class RefereeOut(RefereeSummaryOut):
     confirmed_count: Optional[int] = 0
     refused_count: Optional[int] = 0
 
-class RefereeCreate(BaseSchema):
-    full_name: Optional[str] = None
-    name: Optional[str] = None
-    email: str
-    phone: str
-    license_number: str
-    password: Optional[str] = None
-    temporary_password: Optional[str] = None
+class RefereeCreate(BaseInSchema):
+    full_name: Optional[str] = Field(None, max_length=100)
+    name: Optional[str] = Field(None, max_length=100)
+    email: str = Field(..., max_length=255)
+    phone: str = Field(..., min_length=6, max_length=30)
+    license_number: str = Field(..., min_length=1, max_length=50)
+    password: Optional[str] = Field(None, min_length=8, max_length=128)
+    temporary_password: Optional[str] = Field(None, min_length=8, max_length=128)
 
-class RefereeUpdate(BaseSchema):
-    full_name: Optional[str] = None
-    name: Optional[str] = None
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    license_number: Optional[str] = None
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        res = clean_and_validate_email(v)
+        assert res is not None
+        return res
+
+class RefereeUpdate(BaseInSchema):
+    full_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    email: Optional[str] = Field(None, max_length=255)
+    phone: Optional[str] = Field(None, min_length=6, max_length=30)
+    license_number: Optional[str] = Field(None, min_length=1, max_length=50)
     is_active: Optional[bool] = None
 
-class ReceiptOut(BaseSchema):
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: Optional[str]) -> Optional[str]:
+        return clean_and_validate_email(v)
+
+# ----------------- RECEIPTS -----------------
+
+class ReceiptOut(BaseOutSchema):
     id: str
     assignment_id: str
     receipt_number: str
@@ -90,13 +123,38 @@ class ReceiptOut(BaseSchema):
     amount_in_words: Optional[str] = None
     pdf_url: Optional[str] = None
 
-class MatchSummaryOut(BaseSchema):
+# ----------------- ASSIGNMENTS -----------------
+
+VALID_DIVISIONS = {"1DV", "2DV"}
+VALID_CATEGORIES = {"Men", "Women", "Hommes", "Femmes"}
+VALID_FUNCTIONS = {
+    "Main referee", "Second referee", "Scorer", "Timer", "24s operator",
+    "Arbitre principal", "Second arbitre", "Marqueur", "Chronométreur", "Opérateur 24s",
+}
+
+class AssignmentCreate(BaseInSchema):
+    referee_id: str = Field(..., min_length=1, max_length=50)
+    referee_function: str = Field(..., min_length=1, max_length=100)
+    indemnity: float = Field(..., gt=0, le=100000)
+    paying_team_id: str = Field(..., min_length=1, max_length=50)
+
+    @field_validator("referee_function")
+    @classmethod
+    def validate_function(cls, v: str) -> str:
+        clean = v.strip()
+        if clean not in VALID_FUNCTIONS:
+            # Allow clean string up to 100 chars if not in standard list
+            if len(clean) > 100:
+                raise ValueError("Nom de fonction trop long")
+        return clean
+
+class MatchSummaryOut(BaseOutSchema):
     id: str
     match_number: Optional[str] = None
     home_team_id: str
     away_team_id: str
-    home_team: TeamOut
-    away_team: TeamOut
+    home_team: Optional[TeamOut] = None
+    away_team: Optional[TeamOut] = None
     date: str
     time: str
     city: str
@@ -105,7 +163,7 @@ class MatchSummaryOut(BaseSchema):
     category: str
     status: str = "scheduled"
 
-class AssignmentOut(BaseSchema):
+class AssignmentOut(BaseOutSchema):
     id: str
     match_id: str
     match: Optional[MatchSummaryOut] = None
@@ -134,35 +192,67 @@ class AssignmentOut(BaseSchema):
             return dt.isoformat()
         return dt
 
-class AssignmentCreate(BaseSchema):
-    referee_id: str
-    referee_function: str
-    indemnity: float
-    paying_team_id: str
+# ----------------- MATCHES -----------------
 
-class MatchCreate(BaseSchema):
-    home_team_id: str
-    away_team_id: str
-    date: Optional[str] = None
-    match_date: Optional[str] = None
-    time: Optional[str] = "18:30"
-    city: str
-    venue: str
-    division: str # "1DV" | "2DV"
-    category: str # "Men" | "Women"
+class MatchCreate(BaseInSchema):
+    home_team_id: str = Field(..., min_length=1, max_length=50)
+    away_team_id: str = Field(..., min_length=1, max_length=50)
+    date: Optional[str] = Field(None, max_length=20)
+    match_date: Optional[str] = Field(None, max_length=20)
+    time: Optional[str] = Field("18:30", max_length=10)
+    city: str = Field(..., min_length=1, max_length=100)
+    venue: str = Field(..., min_length=1, max_length=150)
+    division: str = Field(..., min_length=1, max_length=50)
+    category: str = Field(..., min_length=1, max_length=50)
     assignments: List[AssignmentCreate]
 
-class MatchUpdate(BaseSchema):
-    home_team_id: Optional[str] = None
-    away_team_id: Optional[str] = None
-    date: Optional[str] = None
-    match_date: Optional[str] = None
-    time: Optional[str] = None
-    city: Optional[str] = None
-    venue: Optional[str] = None
-    division: Optional[str] = None
-    category: Optional[str] = None
+    @field_validator("division")
+    @classmethod
+    def validate_division(cls, v: str) -> str:
+        clean = v.strip()
+        if clean not in VALID_DIVISIONS:
+            raise ValueError(f"Division invalide: {clean}. Valeurs acceptées: 1DV, 2DV")
+        return clean
+
+    @field_validator("category")
+    @classmethod
+    def validate_category(cls, v: str) -> str:
+        clean = v.strip()
+        if clean not in VALID_CATEGORIES:
+            raise ValueError(f"Catégorie invalide: {clean}. Valeurs acceptées: Men, Women")
+        return clean
+
+class MatchUpdate(BaseInSchema):
+    home_team_id: Optional[str] = Field(None, max_length=50)
+    away_team_id: Optional[str] = Field(None, max_length=50)
+    date: Optional[str] = Field(None, max_length=20)
+    match_date: Optional[str] = Field(None, max_length=20)
+    time: Optional[str] = Field(None, max_length=10)
+    city: Optional[str] = Field(None, min_length=1, max_length=100)
+    venue: Optional[str] = Field(None, min_length=1, max_length=150)
+    division: Optional[str] = Field(None, max_length=50)
+    category: Optional[str] = Field(None, max_length=50)
     assignments: Optional[List[AssignmentCreate]] = None
+
+    @field_validator("division")
+    @classmethod
+    def validate_division(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        clean = v.strip()
+        if clean not in VALID_DIVISIONS:
+            raise ValueError(f"Division invalide: {clean}. Valeurs acceptées: 1DV, 2DV")
+        return clean
+
+    @field_validator("category")
+    @classmethod
+    def validate_category(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        clean = v.strip()
+        if clean not in VALID_CATEGORIES:
+            raise ValueError(f"Catégorie invalide: {clean}. Valeurs acceptées: Men, Women")
+        return clean
 
 class MatchOut(MatchSummaryOut):
     assignments: List[AssignmentOut] = []
@@ -171,10 +261,12 @@ class MatchOut(MatchSummaryOut):
     pending_count: Optional[int] = None
     refused_count: Optional[int] = None
 
-class RefuseInput(BaseSchema):
-    reason: Optional[str] = None
+class RefuseInput(BaseInSchema):
+    reason: Optional[str] = Field(None, max_length=500)
 
-class NotificationOut(BaseSchema):
+# ----------------- NOTIFICATIONS -----------------
+
+class NotificationOut(BaseOutSchema):
     id: str
     user_id: Optional[str] = None
     title: str
@@ -189,7 +281,9 @@ class NotificationOut(BaseSchema):
             return dt.isoformat()
         return dt
 
-class PastMatchItem(BaseSchema):
+# ----------------- STATS -----------------
+
+class PastMatchItem(BaseOutSchema):
     id: str
     home_team: str
     away_team: str
@@ -198,14 +292,14 @@ class PastMatchItem(BaseSchema):
     status: str
     indemnity: float
 
-class RefereeStatsOut(BaseSchema):
+class RefereeStatsOut(BaseOutSchema):
     total_assigned: int
     confirmed: int
     refused: int
     acceptance_rate: int
     past_matches: List[PastMatchItem] = []
 
-class AdminStatsOut(BaseSchema):
+class AdminStatsOut(BaseOutSchema):
     upcoming_matches: int
     pending_responses: int
     refused_this_month: int

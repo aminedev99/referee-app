@@ -21,8 +21,11 @@ def is_needs_attention(match_date: str, match_time: str, asg_status: str, match_
     except Exception:
         return False
 
-def build_assignment_out(a: Assignment, m: Match) -> AssignmentOut:
-    needs_attn = is_needs_attention(m.date, m.time, a.status, getattr(m, "status", "scheduled"))
+def build_assignment_out(a: Assignment, m: Optional[Match] = None) -> AssignmentOut:
+    if m is None and hasattr(a, "match") and a.match:
+        m = a.match
+
+    needs_attn = is_needs_attention(m.date, m.time, a.status, getattr(m, "status", "scheduled")) if m else False
     receipt_out = None
     if a.receipt:
         receipt_out = ReceiptOut(
@@ -57,9 +60,30 @@ def build_assignment_out(a: Assignment, m: Match) -> AssignmentOut:
             city=a.paying_team.city,
         )
 
+    match_out = None
+    if m:
+        home_out = TeamOut(id=m.home_team.id, name=m.home_team.name, city=m.home_team.city) if getattr(m, "home_team", None) else None
+        away_out = TeamOut(id=m.away_team.id, name=m.away_team.name, city=m.away_team.city) if getattr(m, "away_team", None) else None
+        match_out = MatchSummaryOut(
+            id=m.id,
+            match_number=m.match_number,
+            home_team_id=m.home_team_id,
+            away_team_id=m.away_team_id,
+            home_team=home_out,
+            away_team=away_out,
+            date=m.date,
+            time=m.time,
+            city=m.city,
+            venue=m.venue,
+            division=m.division,
+            category=m.category,
+            status=m.status,
+        )
+
     return AssignmentOut(
         id=a.id,
         match_id=a.match_id,
+        match=match_out,
         referee_id=a.referee_id,
         referee=ref_out,
         referee_function=a.referee_function,

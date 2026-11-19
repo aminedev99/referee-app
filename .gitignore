@@ -1,13 +1,39 @@
+# Secrets and environment files
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Dependencies and build outputs
 node_modules/
 .next/
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 .venv/
+.pytest_cache/
+*.tsbuildinfo
+coverage/
+.coverage
+htmlcov/
+
+# Logs and runtime dumps
+*.log
+*.sql
+*.sql.gz
+*.tar.gz
+*.bak
+
+# Application data & persistent storage
 pgdata/
 receipts/
-uiS
-receipts
-.pytest_cache 
+backups/
+templates/
+uiS/
+
+# IDE and OS files
 .vscode/
-backend/tests/
+.idea/
+.DS_Store
+Thumbs.db

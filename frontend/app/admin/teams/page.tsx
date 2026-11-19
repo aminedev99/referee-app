@@ -37,14 +37,14 @@ export default function AdminTeamsPage() {
   const createMutation = useMutation({
     mutationFn: (input: CreateTeamInput) => api.createTeam(input),
     onSuccess: () => {
-      toast.success("Team added successfully");
+      toast.success("Équipe ajoutée avec succès");
       setIsSheetOpen(false);
       setName("");
       setCity("");
       queryClient.invalidateQueries({ queryKey: ["admin-teams"] });
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to add team");
+      toast.error(err.message || "Échec de l'ajout de l'équipe");
     },
   });
 
@@ -52,7 +52,7 @@ export default function AdminTeamsPage() {
     mutationFn: ({ id, input }: { id: string; input: Partial<CreateTeamInput> }) =>
       api.updateTeam(id, input),
     onSuccess: () => {
-      toast.success("Team updated successfully");
+      toast.success("Équipe mise à jour avec succès");
       setIsSheetOpen(false);
       setEditingTeam(null);
       setName("");
@@ -60,7 +60,7 @@ export default function AdminTeamsPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-teams"] });
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to update team");
+      toast.error(err.message || "Échec de la mise à jour de l'équipe");
     },
   });
 
@@ -81,7 +81,7 @@ export default function AdminTeamsPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !city.trim()) {
-      toast.error("Please fill in both name and city");
+      toast.error("Veuillez renseigner le nom et la ville");
       return;
     }
     if (editingTeam) {
@@ -98,18 +98,18 @@ export default function AdminTeamsPage() {
 
   return (
     <>
-      <Navbar title="Teams" backHref="/admin" />
+      <Navbar title="Équipes" backHref="/admin" />
 
       <main className="max-w-2xl mx-auto w-full px-4 md:px-6 pt-4 flex flex-col gap-4">
         <div className="hidden md:flex items-center justify-between">
-          <h2 className="text-[22px] font-bold text-ink">Teams</h2>
+          <h2 className="text-[22px] font-bold text-ink">Équipes</h2>
           <Button
             variant="primary"
             size="md"
             onClick={openCreate}
           >
             <Plus size={16} strokeWidth={1.75} className="mr-1.5" />
-            Add team
+            Ajouter une équipe
           </Button>
         </div>
 
@@ -120,8 +120,8 @@ export default function AdminTeamsPage() {
           <ErrorState onRetry={() => refetch()} />
         ) : teams.length === 0 ? (
           <EmptyState
-            message="No teams found"
-            actionLabel="Add team"
+            message="Aucune équipe trouvée"
+            actionLabel="Ajouter une équipe"
             onAction={openCreate}
           />
         ) : (
@@ -140,7 +140,7 @@ export default function AdminTeamsPage() {
                 </div>
                 <div className="flex items-center gap-2 text-ink-muted">
                   <span className="text-[12px] opacity-0 group-hover:opacity-100 transition-opacity text-brand">
-                    Edit
+                    Modifier
                   </span>
                   <ChevronRight size={18} strokeWidth={1.75} />
                 </div>
@@ -154,7 +154,7 @@ export default function AdminTeamsPage() {
           type="button"
           onClick={openCreate}
           className="md:hidden fixed bottom-20 right-5 z-30 w-14 h-14 rounded-full bg-brand text-surface flex items-center justify-center shadow-lg active:scale-95 transition-transform cursor-pointer"
-          aria-label="Add team"
+          aria-label="Ajouter une équipe"
         >
           <Plus size={28} strokeWidth={2.5} />
         </button>
@@ -167,28 +167,28 @@ export default function AdminTeamsPage() {
           setIsSheetOpen(false);
           setEditingTeam(null);
         }}
-        title={editingTeam ? "Edit team" : "Add team"}
+        title={editingTeam ? "Modifier l'équipe" : "Ajouter une équipe"}
         subtitle={
           editingTeam
-            ? "Update basketball club details"
-            : "Register a new basketball club to the league"
+            ? "Modifier les informations du club"
+            : "Enregistrer un nouveau club auprès de la ligue"
         }
       >
         <form onSubmit={handleSubmit} className="flex flex-col gap-3.5 pt-1">
-          <Field label="Club name" htmlFor="team-name" required>
+          <Field label="Nom du club" htmlFor="team-name" required>
             <Input
               id="team-name"
-              placeholder="e.g. MAS Fès"
+              placeholder="ex. Nom du Club"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
             />
           </Field>
 
-          <Field label="City" htmlFor="team-city" required>
+          <Field label="Ville" htmlFor="team-city" required>
             <Input
               id="team-city"
-              placeholder="e.g. Fès"
+              placeholder="ex. Ville"
               value={city}
               onChange={(e) => setCity(e.target.value)}
               required
@@ -203,7 +203,7 @@ export default function AdminTeamsPage() {
             loading={isSaving}
             className="mt-2"
           >
-            {editingTeam ? "Save changes" : "Create team"}
+            {editingTeam ? "Enregistrer les modifications" : "Créer l'équipe"}
           </Button>
         </form>
       </Modal>

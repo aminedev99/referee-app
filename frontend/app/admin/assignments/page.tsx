@@ -30,20 +30,20 @@ export default function AdminAssignmentsPage() {
   const receiptMutation = useMutation({
     mutationFn: (asgId: string) => api.createReceipt(asgId),
     onSuccess: () => {
-      toast.success("Receipt generated successfully");
+      toast.success("Reçu généré avec succès");
       queryClient.invalidateQueries({ queryKey: ["admin-assignments"] });
     },
     onError: (err: Error) => {
-      toast.error(err.message || "Failed to generate receipt");
+      toast.error(err.message || "Échec de la génération du reçu");
     },
   });
 
   const handleDownloadReceipt = async (id: string) => {
     try {
-      toast.info("Downloading receipt PDF...");
+      toast.info("Téléchargement du reçu PDF...");
       await api.downloadReceiptPdf(id, `recu_${id}.pdf`);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to download receipt";
+      const msg = err instanceof Error ? err.message : "Échec du téléchargement du reçu";
       toast.error(msg);
     }
   };
@@ -58,19 +58,19 @@ export default function AdminAssignmentsPage() {
   });
 
   const tabsConfig = [
-    { id: "all", label: "All" },
-    { id: "pending", label: "Pending", count: pendingCount },
-    { id: "confirmed", label: "Confirmed", count: confirmedCount },
-    { id: "refused", label: "Refused", count: refusedCount },
+    { id: "all", label: "Toutes" },
+    { id: "pending", label: "En attente", count: pendingCount },
+    { id: "confirmed", label: "Confirmées", count: confirmedCount },
+    { id: "refused", label: "Refusées", count: refusedCount },
   ];
 
   return (
     <>
-      <Navbar title="Assignments" />
+      <Navbar title="Désignations" />
 
       <main className="max-w-4xl mx-auto w-full px-4 md:px-6 pt-4 flex flex-col gap-4">
         <div className="hidden md:flex items-center justify-between">
-          <h2 className="text-[22px] font-bold text-ink">Assignments</h2>
+          <h2 className="text-[22px] font-bold text-ink">Désignations</h2>
         </div>
 
         {/* Status Tabs */}
@@ -87,7 +87,7 @@ export default function AdminAssignmentsPage() {
         ) : isError ? (
           <ErrorState onRetry={() => refetch()} />
         ) : filteredAssignments.length === 0 ? (
-          <EmptyState message="No assignments found for this filter" />
+          <EmptyState message="Aucune désignation trouvée pour ce filtre" />
         ) : (
           <>
             {/* Mobile Cards */}

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload
 from app.deps import get_db, require_admin, get_current_user
+from app.config import settings
 from app.models import Assignment, Receipt, User, Match, Referee, Team
 from app.schemas import ReceiptOut
 from app.services.receipts import generate_receipt_pdf, get_amount_in_words_fr
@@ -212,6 +213,16 @@ def get_receipt_pdf(
             detail="Receipt PDF not found",
         )
 
+    # Path safety: build file path strictly from receipt.id, verify resolved path is inside RECEIPTS_DIR
+    receipts_base = os.path.realpath(settings.RECEIPTS_DIR)
+    target_path = os.path.realpath(os.path.join(receipts_base, f"{receipt.id}.pdf"))
+
+    if not target_path.startswith(receipts_base + os.sep) and target_path != receipts_base:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to requested file path",
+        )
+
     # Regenerate fresh PDF so latest design is always served
     pdf_path = generate_receipt_pdf(
         receipt=receipt,
@@ -220,13 +231,16 @@ def get_receipt_pdf(
         match=assignment.match,
         paying_team=assignment.paying_team,
     )
-    receipt.pdf_path = pdf_path
+    receipt.pdf_path = target_path
     db.commit()
 
     filename = f"recu_{receipt.receipt_number.replace('/', '_')}.pdf"
     return FileResponse(
-        path=receipt.pdf_path,
+        path=target_path,
         media_type="application/pdf",
         filename=filename,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Content-Type-Options": "nosniff",
+        },
     )
