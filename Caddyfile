@@ -1,4 +1,5 @@
-{$DOMAIN:admin.draarbitre.com}, {$APP_DOMAIN:draarbitre.com} {
+# Production Web Application (Admin & Referee Portals)
+{$DOMAIN:draarbitre.com} {
     encode gzip zstd
 
     # HTTP Security Headers
@@ -12,7 +13,7 @@
         -Server
     }
 
-    # API Routes -> Backend
+    # API Routes -> FastAPI Backend
     handle /api/* {
         header Cache-Control "no-store"
         reverse_proxy backend:8000 {
@@ -23,8 +24,13 @@
         }
     }
 
-    # All Other Routes -> Frontend
+    # All Other Routes -> Next.js Frontend (Admin dashboard & Referee portal)
     handle {
         reverse_proxy frontend:3000
     }
+}
+
+# Web redirect: if someone opens the SSH host (admin.draarbitre.com) in a browser, redirect to main app
+admin.{$DOMAIN:draarbitre.com} {
+    redir https://{$DOMAIN:draarbitre.com}{uri} permanent
 }

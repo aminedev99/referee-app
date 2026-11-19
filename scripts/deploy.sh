@@ -6,9 +6,9 @@ if [ ! -f ".env" ]; then
     exit 1
 fi
 
-# Load DOMAIN and APP_DOMAIN from .env
-DOMAIN=$(grep -E '^DOMAIN=' .env | cut -d '=' -f2- | tr -d '"' | tr -d "'" || echo "admin.draarbitre.com")
-APP_DOMAIN=$(grep -E '^APP_DOMAIN=' .env | cut -d '=' -f2- | tr -d '"' | tr -d "'" || echo "draarbitre.com")
+# Load DOMAIN from .env
+DOMAIN=$(grep -E '^DOMAIN=' .env | cut -d '=' -f2- | tr -d '"' | tr -d "'" || echo "draarbitre.com")
+SSH_HOST=$(grep -E '^SSH_HOST=' .env | cut -d '=' -f2- | tr -d '"' | tr -d "'" || echo "admin.draarbitre.com")
 
 echo "--> Pulling latest base images..."
 docker compose -f docker-compose.prod.yml pull caddy db
@@ -44,7 +44,7 @@ echo "--> Testing direct internal health endpoint..."
 docker compose -f docker-compose.prod.yml exec -T backend curl -s http://localhost:8000/api/health
 echo ""
 
-echo "--> Running public smoke test on https://${DOMAIN}/api/health (Admin / VPS)..."
+echo "--> Running public smoke test on https://${DOMAIN}/api/health..."
 STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://${DOMAIN}/api/health" || true)
 if [ "$STATUS_CODE" = "200" ]; then
     echo "  [PASS] https://${DOMAIN}/api/health returned 200 OK."
@@ -52,12 +52,10 @@ else
     echo "  [INFO] https://${DOMAIN}/api/health returned HTTP $STATUS_CODE (DNS or Let's Encrypt TLS certificate may still be binding)."
 fi
 
-echo "--> Running public smoke test on https://${APP_DOMAIN}/api/health (App)..."
-APP_STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://${APP_DOMAIN}/api/health" || true)
-if [ "$APP_STATUS_CODE" = "200" ]; then
-    echo "  [PASS] https://${APP_DOMAIN}/api/health returned 200 OK."
-else
-    echo "  [INFO] https://${APP_DOMAIN}/api/health returned HTTP $APP_STATUS_CODE (DNS or Let's Encrypt TLS certificate may still be binding)."
-fi
+echo "--> Checking SSH host redirect from https://${SSH_HOST}..."
+REDIR_CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://${SSH_HOST}" || true)
+echo "  [INFO] https://${SSH_HOST} HTTP status: $REDIR_CODE (redirects to https://${DOMAIN})"
 
 echo "--> Deployment completed successfully."
+echo "--> Admin Dashboard URL : https://${DOMAIN}/admin"
+echo "--> SSH Host (Port 22)  : ${SSH_HOST}"

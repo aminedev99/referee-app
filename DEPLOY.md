@@ -2,27 +2,28 @@
 
 **Target Environment**: Hostinger VPS, Ubuntu 24.04 LTS  
 **Domains**:
-- `draarbitre.com` — Public Application & Referee Portal
-- `admin.draarbitre.com` — Administration Dashboard & VPS Access Host
-**Architecture**: Single origin reverse proxy via Caddy (automatic Let's Encrypt HTTPS for both domains), routing `/api/*` to FastAPI backend and all other routes to Next.js frontend, backed by PostgreSQL 16.
+- `draarbitre.com` — **Full Web Application & Portals** (Admin management dashboard at `/admin`, Referee portal at `/referee`, Login at `/login`)
+- `admin.draarbitre.com` — **Reserved for SSH Access** to the VPS (`ssh root@admin.draarbitre.com` on Port 22)
+
+**Architecture**: Single-origin reverse proxy via Caddy (automatic Let's Encrypt HTTPS on `draarbitre.com`), routing `/api/*` to FastAPI backend and all other routes to Next.js frontend, backed by PostgreSQL 16. Web requests to `admin.draarbitre.com` automatically redirect to `https://draarbitre.com`.
 
 ---
 
 ## 1. Domain & DNS Configuration (Hostinger / Registrar)
 
-Before running the deployment scripts on your VPS, configure the following DNS records in your domain registrar / Hostinger DNS Zone so that both domains point to your VPS IP:
+Configure the following DNS records in your domain registrar / Hostinger DNS Zone so that both domains point to your VPS IP:
 
-| Type | Name / Host | Value / Target | Purpose |
-| :--- | :--- | :--- | :--- |
-| **A** | `@` (`draarbitre.com`) | `<YOUR_VPS_IP>` | Public App access for referees, matches & clubs |
-| **A** | `admin` (`admin.draarbitre.com`) | `<YOUR_VPS_IP>` | Admin portal & direct VPS management access |
-| **CNAME** | `www` (`www.draarbitre.com`) | `draarbitre.com` | Web alias (optional) |
+| Type | Name / Host | Value / Target | Purpose | Ports Used |
+| :--- | :--- | :--- | :--- | :--- |
+| **A** | `@` (`draarbitre.com`) | `<YOUR_VPS_IP>` | **All Web Access**: Admin dashboard (`/admin`), Referee portal (`/referee`), API (`/api`) | 80, 443 |
+| **A** | `admin` (`admin.draarbitre.com`) | `<YOUR_VPS_IP>` | **SSH Access Only**: Direct VPS terminal access (`ssh root@admin.draarbitre.com`) | 22 |
+| **CNAME** | `www` (`www.draarbitre.com`) | `draarbitre.com` | Web alias (optional) | 80, 443 |
 
-> [!NOTE]
-> Once DNS propagation completes, you can access the VPS directly via SSH using the admin domain:
-> ```bash
-> ssh root@admin.draarbitre.com
-> ```
+> [!TIP]
+> With this setup:
+> - **SSH to your VPS**: `ssh root@admin.draarbitre.com`
+> - **Open Admin Dashboard**: Visit `https://draarbitre.com/admin` (or `https://draarbitre.com/login`)
+> - **Open Referee Portal**: Visit `https://draarbitre.com/referee`
 
 ---
 
@@ -37,8 +38,8 @@ curl -fsSL https://get.docker.com | sh && sudo usermod -aG docker $USER && newgr
 # 2. Clone the repository
 git clone <YOUR_GIT_REPOSITORY_URL> /opt/referee-app && cd /opt/referee-app
 
-# 3. Generate secure production environment for both domains (saves .env with chmod 600)
-bash scripts/gen-env.sh admin.draarbitre.com admin@draarbitre.com draarbitre.com
+# 3. Generate secure production environment (saves .env with chmod 600)
+bash scripts/gen-env.sh draarbitre.com admin@draarbitre.com admin.draarbitre.com
 
 # 4. Deploy the production stack (builds non-root images, starts containers, verifies health)
 bash scripts/deploy.sh
@@ -61,9 +62,9 @@ sudo apt install -y ufw fail2ban curl git jq
 # Configure firewall
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
-sudo ufw allow 22/tcp comment "SSH"
+sudo ufw allow 22/tcp comment "SSH (admin.draarbitre.com)"
 sudo ufw allow 80/tcp comment "HTTP (Caddy Let's Encrypt)"
-sudo ufw allow 443/tcp comment "HTTPS (Caddy)"
+sudo ufw allow 443/tcp comment "HTTPS (Caddy: draarbitre.com)"
 sudo ufw --force enable
 sudo ufw status verbose
 ```
@@ -80,16 +81,16 @@ sudo systemctl status fail2ban
 
 ## 4. Production Environment Generation (`scripts/gen-env.sh`)
 
-The script `scripts/gen-env.sh` accepts domain arguments and automatically generates cryptographically strong random credentials using `openssl rand -hex` and creates the `.env` file with `chmod 600` permissions.
+The script `scripts/gen-env.sh` automatically generates cryptographically strong random credentials using `openssl rand -hex` and creates the `.env` file with `chmod 600` permissions.
 
 ```bash
-# Usage: bash scripts/gen-env.sh [DOMAIN] [ADMIN_EMAIL] [APP_DOMAIN]
-bash scripts/gen-env.sh admin.draarbitre.com admin@draarbitre.com draarbitre.com
+# Usage: bash scripts/gen-env.sh [DOMAIN] [ADMIN_EMAIL] [SSH_HOST]
+bash scripts/gen-env.sh draarbitre.com admin@draarbitre.com admin.draarbitre.com
 ```
 
 ### Generated Parameters in `.env`
-- `DOMAIN`: Admin / VPS domain (`admin.draarbitre.com`).
-- `APP_DOMAIN`: Public application domain (`draarbitre.com`).
+- `DOMAIN`: Web application domain (`draarbitre.com`).
+- `SSH_HOST`: VPS SSH host (`admin.draarbitre.com`).
 - `ENV`: Set to `production` (enforces strict security guards, hides debug traces).
 - `POSTGRES_USER`: Dedicated database user (`referee_user`).
 - `POSTGRES_PASSWORD`: 48-character random hex database password.
@@ -114,7 +115,7 @@ The deployment script executes the complete build, start, and verification cycle
 3. Builds the non-root multi-stage Docker images (`backend` and `frontend`).
 4. Launches the stack using `docker-compose.prod.yml`.
 5. Waits for internal services to become healthy.
-6. Executes smoke tests on both `https://admin.draarbitre.com/api/health` and `https://draarbitre.com/api/health`.
+6. Executes smoke tests on `https://draarbitre.com/api/health`.
 
 ```bash
 bash scripts/deploy.sh
@@ -127,31 +128,36 @@ docker compose -f docker-compose.prod.yml ps
 
 ---
 
-## 6. Multi-Domain Routing & Architecture (`Caddyfile`)
-
-Caddy acts as the unified edge router and automatic TLS certificate manager for **both** domains:
+## 6. Access Architecture & Traffic Routing
 
 ```mermaid
 flowchart TD
-    Internet[Internet: 80 / 443] -->|Automatic HTTPS| Caddy[Caddy Reverse Proxy]
-    subgraph Domains Served
-        D1[draarbitre.com - App Portal]
-        D2[admin.draarbitre.com - Admin & VPS Portal]
+    subgraph External Internet Traffic
+        SSH_Client[SSH Client: port 22]
+        Web_Browser[Browser: port 80 / 443]
     end
-    D1 -.-> Caddy
-    D2 -.-> Caddy
-    subgraph referee_internal [Internal Docker Network]
-        Caddy -->|/api/*| Backend[FastAPI Backend :8000]
-        Caddy -->|/*| Frontend[Next.js Frontend :3000]
-        Backend -->|Internal TCP 5432| DB[(PostgreSQL 16)]
-        Backend --> ReceiptsVol[(./receipts Volume)]
+
+    subgraph Hostinger VPS
+        SSH_Daemon[OpenSSH Server :22]
+        Caddy[Caddy Reverse Proxy :80 / :443]
+
+        subgraph referee_internal [Internal Docker Network]
+            Caddy -->|/api/*| Backend[FastAPI Backend :8000]
+            Caddy -->|/*: /admin & /referee| Frontend[Next.js Frontend :3000]
+            Backend -->|Internal TCP 5432| DB[(PostgreSQL 16)]
+            Backend --> ReceiptsVol[(./receipts Volume)]
+        end
     end
+
+    SSH_Client -->|admin.draarbitre.com:22| SSH_Daemon
+    Web_Browser -->|draarbitre.com:443| Caddy
+    Web_Browser -.->|admin.draarbitre.com:443 (Redirect)| Caddy
 ```
 
-- **Dual-Domain Automatic TLS**: Caddy provisions and auto-renews Let's Encrypt certificates for both `draarbitre.com` and `admin.draarbitre.com`.
-- **Public App Access**: Referees and clubs access the application seamlessly via `https://draarbitre.com`.
-- **Admin / VPS Access**: Administrators can access the management portal via `https://admin.draarbitre.com` (and access the VPS host via `ssh root@admin.draarbitre.com`).
-- **Security Headers**: HSTS, CSP, `X-Frame-Options: DENY`, `no-store` on `/api/*` are enforced on all origins.
+- **Administrator Web Access**: Open `https://draarbitre.com/login` and log in with your admin credentials to access `https://draarbitre.com/admin`.
+- **Referee Web Access**: Referees log in at `https://draarbitre.com/login` and are directed to `https://draarbitre.com/referee`.
+- **VPS Administration**: Connect directly via terminal: `ssh root@admin.draarbitre.com`.
+- **Accidental Web Hits on `admin.draarbitre.com`**: Automatically redirected to `https://draarbitre.com`.
 
 ---
 
@@ -199,18 +205,14 @@ bash scripts/restore.sh <YYYYMMDD_HHMMSS>
 
 ## 9. Verification & Troubleshooting
 
-### Verify SSL & Health for Both Domains
-Test both the public app domain and the admin/VPS domain:
+### Verify SSL & Health
+Check that HTTPS and the health endpoint are responding on `draarbitre.com`:
 
 ```bash
-# 1. Admin & VPS access health check
-curl -I https://admin.draarbitre.com/api/health
-
-# 2. Main App domain health check
 curl -I https://draarbitre.com/api/health
 ```
 
-Expected response for both:
+Expected response:
 ```http
 HTTP/2 200
 content-type: application/json
