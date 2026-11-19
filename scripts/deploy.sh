@@ -14,6 +14,13 @@ echo "--> Pulling latest base images..."
 docker compose -f docker-compose.prod.yml pull caddy db
 
 echo "--> Building and starting production stack..."
+docker compose -f docker-compose.prod.yml build backend frontend
+
+echo "--> Preparing receipt storage permissions..."
+mkdir -p ./receipts
+docker compose -f docker-compose.prod.yml run --rm --no-deps --user "0:0" --entrypoint sh backend -c \
+    'chown -R appuser:appuser /code/receipts && chmod 0775 /code/receipts'
+
 docker compose -f docker-compose.prod.yml up -d --build
 
 echo "--> Waiting for services to become healthy..."
