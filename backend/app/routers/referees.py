@@ -59,6 +59,7 @@ def get_referees(
                 email=r.email,
                 phone=r.phone,
                 license_number=r.license_number,
+                gender=getattr(r, "gender", "Homme") or "Homme",
                 category=r.category or "National Referee",
                 is_active=r.is_active,
                 matches_count=st["total"],
@@ -124,12 +125,14 @@ def create_referee(
     db.add(user)
     db.flush()
 
+    ref_gender = ref_in.gender if ref_in.gender in ("Homme", "Femme") else "Homme"
     referee = Referee(
         user_id=user.id,
         name=full_name,
         email=email_clean,
         phone=normalized_phone,
         license_number=license_clean,
+        gender=ref_gender,
         category="National Referee",
         is_active=True,
     )
@@ -144,6 +147,7 @@ def create_referee(
         email=referee.email,
         phone=referee.phone,
         license_number=referee.license_number,
+        gender=referee.gender,
         category=referee.category,
         is_active=referee.is_active,
         matches_count=0,
@@ -193,6 +197,7 @@ def get_referee(
         email=referee.email,
         phone=referee.phone,
         license_number=referee.license_number,
+        gender=getattr(referee, "gender", "Homme") or "Homme",
         category=referee.category or "National Referee",
         is_active=referee.is_active,
         matches_count=stats["total_assigned"],
@@ -254,6 +259,10 @@ def update_referee(
     # Phone update
     if ref_in.phone:
         referee.phone = normalize_moroccan_phone(ref_in.phone)
+
+    # Gender update
+    if ref_in.gender in ("Homme", "Femme"):
+        referee.gender = ref_in.gender
 
     # Active status update
     if ref_in.is_active is not None:

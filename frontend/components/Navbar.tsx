@@ -68,8 +68,13 @@ export const Navbar: React.FC<NavbarProps> = ({ title, backHref, hideBottomNav }
               <span>{title || "Retour"}</span>
             </button>
           ) : (
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-brand" />
+            <div className="flex items-center gap-2.5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logo-ligue.png"
+                alt="Logo Ligue"
+                className="w-8 h-8 object-contain"
+              />
               <h1 className="text-[18px] font-semibold text-ink tracking-tight">
                 {title || (isAdmin ? "Administration" : "Désignations")}
               </h1>

@@ -32,6 +32,7 @@ export default function AdminRefereesPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [license, setLicense] = useState("");
+  const [gender, setGender] = useState<"Homme" | "Femme">("Homme");
   const [password, setPassword] = useState("Ref2026@Temp");
 
   const {
@@ -53,6 +54,7 @@ export default function AdminRefereesPage() {
       setEmail("");
       setPhone("");
       setLicense("");
+      setGender("Homme");
       queryClient.invalidateQueries({ queryKey: ["admin-referees"] });
     },
     onError: (err: Error) => {
@@ -71,6 +73,7 @@ export default function AdminRefereesPage() {
       email,
       phone,
       license_number: license,
+      gender,
       temporary_password: password,
     });
   };
@@ -224,6 +227,33 @@ export default function AdminRefereesPage() {
               onChange={(e) => setLicense(e.target.value)}
               required
             />
+          </Field>
+
+          <Field label="Sexe" required>
+            <div className="flex items-center gap-6 pt-1">
+              <label className="flex items-center gap-2 cursor-pointer text-[14px] text-ink font-medium">
+                <input
+                  type="radio"
+                  name="gender"
+                  value="Homme"
+                  checked={gender === "Homme"}
+                  onChange={() => setGender("Homme")}
+                  className="accent-brand w-4 h-4 cursor-pointer"
+                />
+                Homme (MR)
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer text-[14px] text-ink font-medium">
+                <input
+                  type="radio"
+                  name="gender"
+                  value="Femme"
+                  checked={gender === "Femme"}
+                  onChange={() => setGender("Femme")}
+                  className="accent-brand w-4 h-4 cursor-pointer"
+                />
+                Femme (MS)
+              </label>
+            </div>
           </Field>
 
           <Field label="Mot de passe temporaire" htmlFor="ref-password">

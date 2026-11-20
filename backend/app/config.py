@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     JWT_SECRET: str = os.getenv("JWT_SECRET", os.getenv("SECRET_KEY", "super-secret-key-for-jwt-referee-app-2026"))
     ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "720"))
-    RECEIPTS_DIR: str = os.getenv("RECEIPTS_DIR", "/code/receipts")
+    RECEIPTS_DIR: str = os.getenv("RECEIPTS_DIR", "receipts" if os.name == "nt" else "/code/receipts")
     ADMIN_EMAIL: Optional[str] = os.getenv("ADMIN_EMAIL")
     ADMIN_PASSWORD: Optional[str] = os.getenv("ADMIN_PASSWORD")
     ADMIN_NAME: str = os.getenv("ADMIN_NAME", "Administrator")

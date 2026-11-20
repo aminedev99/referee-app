@@ -41,25 +41,14 @@ function LoginForm() {
     <main className="min-h-screen bg-canvas flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <Card className="p-6 md:p-8 flex flex-col items-center">
-          {/* Basketball Icon */}
-          <div className="w-14 h-14 rounded-full bg-[#FFF1E8] border border-brand/20 flex items-center justify-center text-brand mb-4">
-            <svg
-              className="w-8 h-8"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#EA580C"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <path d="M4.93 4.93l4.24 4.24" />
-              <path d="M14.83 9.17l4.24-4.24" />
-              <path d="M14.83 14.83l4.24 4.24" />
-              <path d="M9.17 14.83L4.93 19.07" />
-              <path d="M12 2v20" />
-              <path d="M2 12h20" />
-            </svg>
+          {/* Logo Ligue Daraâ-Tafilalet */}
+          <div className="w-20 h-20 relative mb-4 flex items-center justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo-ligue.png"
+              alt="Logo Ligue Daraâ-Tafilalet de Basketball"
+              className="max-h-20 w-auto object-contain drop-shadow-sm"
+            />
           </div>
 
           <h1 className="text-[24px] font-bold text-ink mb-1">Gestion des Arbitres</h1>

@@ -100,7 +100,7 @@ export default function AdminRefereeDetailPage() {
           </h2>
 
           <p className="text-[13px] text-ink-muted mt-0.5">
-            Licence {displayLicense} • {referee.category || "Arbitre National"}
+            Civilité : <strong className="text-ink font-semibold">{referee.gender === "Femme" ? "MS" : "MR"}</strong> ({referee.gender || "Homme"}) • Licence {displayLicense} • {referee.category || "Arbitre National"}
           </p>
 
           <div className="flex items-center gap-4 text-[13px] text-ink-muted mt-3">

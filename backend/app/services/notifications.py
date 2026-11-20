@@ -14,12 +14,12 @@ def notify(
 
     if not title:
         type_titles = {
-            "assignment": "New assignment",
-            "confirmation": "Assignment confirmed",
-            "confirmed": "Assignment confirmed",
-            "refusal": "Assignment refused",
-            "refused": "Assignment refused",
-            "receipt": "Receipt available",
+            "assignment": "Nouvelle désignation",
+            "confirmation": "Désignation confirmée",
+            "confirmed": "Désignation confirmée",
+            "refusal": "Désignation refusée",
+            "refused": "Désignation refusée",
+            "receipt": "Reçu disponible",
         }
         title = type_titles.get(type, "Notification")
 

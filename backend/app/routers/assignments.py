@@ -68,9 +68,9 @@ def delete_assignment(
         notify(
             db,
             assignment.referee.user_id,
-            f"Assignment cancelled: {match_str}",
+            f"Désignation annulée : {match_str}",
             type="assignment",
-            title=f"Assignment cancelled: {match_str}",
+            title=f"Désignation annulée : {match_str}",
         )
 
     db.delete(assignment)
@@ -102,7 +102,7 @@ def remind_assignment(
     if assignment.status != "pending":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Reminder can only be sent for pending assignments",
+            detail="Le rappel ne peut être envoyé que pour les désignations en attente",
         )
 
     now = datetime.now(timezone.utc)
@@ -111,7 +111,7 @@ def remind_assignment(
         if diff_hours < 12.0:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Reminder already sent in the last 12 hours. Please wait before reminding again.",
+                detail="Rappel déjà envoyé dans les 12 dernières heures. Veuillez patienter.",
             )
 
     assignment.last_reminded_at = now
@@ -121,10 +121,10 @@ def remind_assignment(
         notify(
             db,
             assignment.referee.user_id,
-            f"Reminder: please respond to {match_str}",
+            f"Rappel : merci de répondre à votre désignation pour {match_str}",
             type="assignment",
-            title=f"Reminder: please respond to {match_str}",
+            title=f"Rappel de désignation : {match_str}",
         )
 
     db.commit()
-    return {"status": "ok", "message": "Reminder sent successfully"}
+    return {"status": "ok", "message": "Rappel envoyé avec succès"}

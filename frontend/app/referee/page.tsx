@@ -104,6 +104,19 @@ export default function RefereeAssignmentsPage() {
       <Navbar title="Désignations" />
 
       <main className="max-w-xl mx-auto w-full px-4 pt-4 flex flex-col gap-4">
+        {/* Ligue Header Banner */}
+        <div className="flex items-center gap-3 bg-surface p-3.5 rounded-[12px] border border-line shadow-xs">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo-ligue.png"
+            alt="Ligue Daraâ-Tafilalet de Basketball"
+            className="w-11 h-11 object-contain"
+          />
+          <div>
+            <h1 className="text-[16px] font-bold text-ink">Ligue Daraâ-Tafilalet de Basketball</h1>
+            <p className="text-[12px] text-ink-muted">Espace Arbitre</p>
+          </div>
+        </div>
         {/* Tab switcher */}
         <Tabs
           items={tabsConfig}

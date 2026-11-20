@@ -42,6 +42,7 @@ class Referee(Base):
     email = Column(String(255), nullable=False)
     phone = Column(String(50), nullable=False)
     license_number = Column(String(50), nullable=False)
+    gender = Column(String(10), default="Homme", nullable=False) # "Homme" | "Femme"
     category = Column(String(100), default="National Referee")
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=get_utc_now)
@@ -77,8 +78,9 @@ class Match(Base):
     time = Column(String(50), nullable=False) # e.g. "18:30"
     city = Column(String(255), nullable=False)
     venue = Column(String(255), nullable=False)
-    division = Column(String(50), nullable=False) # "1DV" | "2DV"
-    category = Column(String(50), nullable=False) # "Men" | "Women"
+    division = Column(String(50), nullable=False) # "1DV" | "2DV" | "3DV"
+    category = Column(String(50), nullable=False) # "Seniors", "U19", etc.
+    gender = Column(String(10), default="Homme", nullable=False) # "Homme" | "Femme"
     status = Column(String(20), default="scheduled", nullable=False) # "scheduled" | "cancelled"
     created_by_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=get_utc_now)
@@ -94,8 +96,10 @@ class Assignment(Base):
     match_id = Column(String(36), ForeignKey("matches.id", ondelete="CASCADE"), nullable=False)
     referee_id = Column(String(36), ForeignKey("referees.id", ondelete="CASCADE"), nullable=False)
     referee_function = Column(String(100), nullable=False)
-    indemnity = Column(Float, nullable=False)
-    paying_team_id = Column(String(36), ForeignKey("teams.id"), nullable=False)
+    indemnity = Column(Float, nullable=False, default=0.0)
+    paying_team_id = Column(String(36), ForeignKey("teams.id"), nullable=True)
+    indemnity_home = Column(Float, nullable=True)
+    indemnity_away = Column(Float, nullable=True)
     status = Column(String(50), nullable=False, default="pending") # "pending" | "confirmed" | "refused"
     refusal_reason = Column(String(500), nullable=True)
     last_reminded_at = Column(DateTime(timezone=True), nullable=True)

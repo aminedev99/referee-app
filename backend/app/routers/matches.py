@@ -48,6 +48,7 @@ def build_assignment_out(a: Assignment, m: Optional[Match] = None) -> Assignment
             email=a.referee.email,
             phone=a.referee.phone,
             license_number=a.referee.license_number,
+            gender=getattr(a.referee, "gender", "Homme") or "Homme",
             category=a.referee.category,
             is_active=a.referee.is_active,
         )
@@ -77,6 +78,7 @@ def build_assignment_out(a: Assignment, m: Optional[Match] = None) -> Assignment
             venue=m.venue,
             division=m.division,
             category=m.category,
+            gender=getattr(m, "gender", "Homme") or "Homme",
             status=m.status,
         )
 
@@ -88,7 +90,9 @@ def build_assignment_out(a: Assignment, m: Optional[Match] = None) -> Assignment
         referee=ref_out,
         referee_function=a.referee_function,
         indemnity=a.indemnity,
-        paying_team_id=a.paying_team_id,
+        indemnity_home=getattr(a, "indemnity_home", None) or a.indemnity,
+        indemnity_away=getattr(a, "indemnity_away", None) or a.indemnity,
+        paying_team_id=a.paying_team_id or (m.home_team_id if m else None),
         paying_team=paying_out,
         status=a.status,
         refusal_reason=a.refusal_reason,
@@ -115,6 +119,7 @@ def build_match_out(m: Match) -> MatchOut:
         venue=m.venue,
         division=m.division,
         category=m.category,
+        gender=getattr(m, "gender", "Homme") or "Homme",
         status=m.status,
         assignments=asgs_out,
         assignments_count=len(asgs),
@@ -289,12 +294,17 @@ def create_match(
 
     # Validate active referees and run conflict checks
     for asg_in in match_in.assignments:
-        if asg_in.indemnity <= 0:
+        base_ind = float(asg_in.indemnity or 0.0)
+        ind_home = float(asg_in.indemnity_home) if asg_in.indemnity_home is not None else base_ind
+        ind_away = float(asg_in.indemnity_away) if asg_in.indemnity_away is not None else base_ind
+        main_ind = base_ind if base_ind > 0 else (ind_home if ind_home > 0 else ind_away)
+        if main_ind <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Indemnity must be greater than 0",
             )
-        if asg_in.paying_team_id not in (match_in.home_team_id, match_in.away_team_id):
+        paying_id = asg_in.paying_team_id or match_in.home_team_id
+        if paying_id not in (match_in.home_team_id, match_in.away_team_id):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Paying team must be either home or away team",
@@ -326,6 +336,7 @@ def create_match(
         venue=match_in.venue.strip(),
         division=match_in.division,
         category=match_in.category,
+        gender=match_in.gender or "Homme",
         status="scheduled",
         created_by_id=current_user.id,
     )
@@ -335,12 +346,18 @@ def create_match(
     notify_user_ids: List[str] = []
     for asg_in in match_in.assignments:
         ref = db.query(Referee).filter(Referee.id == asg_in.referee_id).first()
+        base_ind = float(asg_in.indemnity or 0.0)
+        ind_home = float(asg_in.indemnity_home) if asg_in.indemnity_home is not None else base_ind
+        ind_away = float(asg_in.indemnity_away) if asg_in.indemnity_away is not None else base_ind
+        main_ind = base_ind if base_ind > 0 else (ind_home if ind_home > 0 else ind_away)
         assignment = Assignment(
             match_id=match.id,
             referee_id=asg_in.referee_id,
             referee_function=asg_in.referee_function,
-            indemnity=float(asg_in.indemnity),
-            paying_team_id=asg_in.paying_team_id,
+            indemnity=main_ind,
+            indemnity_home=ind_home,
+            indemnity_away=ind_away,
+            paying_team_id=asg_in.paying_team_id or match_in.home_team_id,
             status="pending",
         )
         db.add(assignment)
@@ -348,8 +365,8 @@ def create_match(
             notify_user_ids.append(ref.user_id)
 
     # One notification per referee
-    notif_msg = f"New assignment: {home_team.name} vs {away_team.name}, {match_date}"
-    notify(db, notify_user_ids, notif_msg, type="assignment", title="New assignment")
+    notif_msg = f"Nouvelle désignation : {home_team.name} vs {away_team.name}, le {match_date}"
+    notify(db, notify_user_ids, notif_msg, type="assignment", title="Nouvelle désignation")
 
     db.commit()
     return get_match(match.id, db=db, current_user=current_user)
@@ -413,6 +430,8 @@ def update_match(
         match.division = match_in.division
     if match_in.category:
         match.category = match_in.category
+    if match_in.gender:
+        match.gender = match_in.gender
     if match_in.home_team_id:
         match.home_team_id = match_in.home_team_id
     if match_in.away_team_id:
@@ -432,9 +451,9 @@ def update_match(
             notify(
                 db,
                 referees_to_renotify,
-                "Match updated, please confirm again",
+                "Le match a été modifié, veuillez confirmer à nouveau votre disponibilité",
                 type="assignment",
-                title="Match updated, please confirm again",
+                title="Match modifié",
             )
 
     # Sync assignments if provided
@@ -462,20 +481,25 @@ def update_match(
                     notify(
                         db,
                         existing.referee.user_id,
-                        f"Assignment cancelled: {match.home_team.name} vs {match.away_team.name}",
+                        f"Désignation annulée : {match.home_team.name} vs {match.away_team.name}",
                         type="assignment",
-                        title=f"Assignment cancelled: {match.home_team.name} vs {match.away_team.name}",
+                        title="Désignation annulée",
                     )
                 db.delete(existing)
 
         # Add or update assignments
         for asg_in in match_in.assignments:
-            if asg_in.indemnity <= 0:
+            base_ind = float(asg_in.indemnity or 0.0)
+            ind_home = float(asg_in.indemnity_home) if asg_in.indemnity_home is not None else base_ind
+            ind_away = float(asg_in.indemnity_away) if asg_in.indemnity_away is not None else base_ind
+            main_ind = base_ind if base_ind > 0 else (ind_home if ind_home > 0 else ind_away)
+            if main_ind <= 0:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Indemnity must be greater than 0",
                 )
-            if asg_in.paying_team_id not in (home_id, away_id):
+            paying_id = asg_in.paying_team_id or home_id
+            if paying_id not in (home_id, away_id):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Paying team must be either home or away team",
@@ -484,7 +508,11 @@ def update_match(
             if asg_in.referee_id in existing_by_ref:
                 existing = existing_by_ref[asg_in.referee_id]
                 changed_fn = existing.referee_function != asg_in.referee_function
-                changed_ind = float(existing.indemnity) != float(asg_in.indemnity)
+                changed_ind = (
+                    float(existing.indemnity) != main_ind or
+                    float(getattr(existing, "indemnity_home", 0.0) or 0.0) != ind_home or
+                    float(getattr(existing, "indemnity_away", 0.0) or 0.0) != ind_away
+                )
                 if changed_fn or changed_ind:
                     # Changing an indemnity or function resets that assignment to pending and notifies. Blocked with 409 if receipt exists.
                     if existing.receipt is not None:
@@ -493,18 +521,20 @@ def update_match(
                             detail="Cannot change function or indemnity for an assignment with an issued receipt",
                         )
                     existing.referee_function = asg_in.referee_function
-                    existing.indemnity = float(asg_in.indemnity)
+                    existing.indemnity = main_ind
+                    existing.indemnity_home = ind_home
+                    existing.indemnity_away = ind_away
                     existing.status = "pending"
                     existing.refusal_reason = None
                     if existing.referee and existing.referee.user_id:
                         notify(
                             db,
                             existing.referee.user_id,
-                            f"Assignment updated: {match.home_team.name} vs {match.away_team.name}, please confirm again",
+                            f"Désignation modifiée : {match.home_team.name} vs {match.away_team.name}, veuillez confirmer à nouveau",
                             type="assignment",
-                            title="Assignment updated",
+                            title="Désignation modifiée",
                         )
-                existing.paying_team_id = asg_in.paying_team_id
+                existing.paying_team_id = paying_id
             else:
                 ref = db.query(Referee).filter(Referee.id == asg_in.referee_id).first()
                 if not ref:
@@ -523,8 +553,10 @@ def update_match(
                     match_id=id,
                     referee_id=ref.id,
                     referee_function=asg_in.referee_function,
-                    indemnity=float(asg_in.indemnity),
-                    paying_team_id=asg_in.paying_team_id,
+                    indemnity=main_ind,
+                    indemnity_home=ind_home,
+                    indemnity_away=ind_away,
+                    paying_team_id=paying_id,
                     status="pending",
                 )
                 db.add(new_asg)
@@ -532,9 +564,9 @@ def update_match(
                     notify(
                         db,
                         ref.user_id,
-                        f"New assignment: {match.home_team.name} vs {match.away_team.name}, {match.date}",
+                        f"Nouvelle désignation : {match.home_team.name} vs {match.away_team.name}, le {match.date}",
                         type="assignment",
-                        title="New assignment",
+                        title="Nouvelle désignation",
                     )
 
     db.commit()
@@ -561,8 +593,8 @@ def cancel_match(
         if a.referee and a.referee.user_id
     ]
 
-    notif_msg = f"Match cancelled: {match.home_team.name} vs {match.away_team.name}"
-    notify(db, ref_user_ids, notif_msg, type="assignment", title="Match cancelled")
+    notif_msg = f"Match annulé : {match.home_team.name} vs {match.away_team.name}"
+    notify(db, ref_user_ids, notif_msg, type="assignment", title="Match annulé")
 
     db.commit()
-    return {"status": "ok", "message": "Match cancelled"}
+    return {"status": "ok", "message": "Match annulé"}

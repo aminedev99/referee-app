@@ -164,8 +164,8 @@ def confirm_my_assignment(
     admins = db.query(User).filter(User.role == "admin").all()
     admin_ids = [a.id for a in admins]
     match_str = f"{match.home_team.name} vs {match.away_team.name}"
-    notif_msg = f"{referee.name} confirmed {match_str}"
-    notify(db, admin_ids, notif_msg, type="confirmation", title=f"{referee.name} confirmed")
+    notif_msg = f"{referee.name} a confirmé sa désignation pour {match_str}"
+    notify(db, admin_ids, notif_msg, type="confirmation", title=f"{referee.name} a confirmé")
 
     db.commit()
     db.refresh(assignment)
@@ -251,8 +251,8 @@ def refuse_my_assignment(
     admins = db.query(User).filter(User.role == "admin").all()
     admin_ids = [a.id for a in admins]
     match_str = f"{match.home_team.name} vs {match.away_team.name}"
-    notif_msg = f"{referee.name} refused {match_str}"
-    notify(db, admin_ids, notif_msg, type="refusal", title=f"{referee.name} refused")
+    notif_msg = f"{referee.name} a refusé sa désignation pour {match_str}"
+    notify(db, admin_ids, notif_msg, type="refusal", title=f"{referee.name} a refusé")
 
     db.commit()
     db.refresh(assignment)
@@ -281,6 +281,7 @@ def get_my_profile(
         email=referee.email,
         phone=referee.phone,
         license_number=referee.license_number,
+        gender=getattr(referee, "gender", "Homme") or "Homme",
         category=referee.category or "National Referee",
         is_active=referee.is_active,
         matches_count=stats["total_assigned"],

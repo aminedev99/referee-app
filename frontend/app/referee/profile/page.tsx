@@ -143,6 +143,12 @@ function RefereeProfileContent({ profile }: { profile: Referee }) {
           <span className="text-ink-muted">Numéro de licence</span>
           <span className="font-medium text-ink">{displayLicense}</span>
         </div>
+        <div className="flex items-center justify-between text-[13px] py-1 border-b border-line">
+          <span className="text-ink-muted">Civilité & Sexe</span>
+          <span className="font-medium text-ink">
+            {profile.gender === "Femme" ? "MS (Femme)" : "MR (Homme)"}
+          </span>
+        </div>
         <p className="text-[11px] text-ink-muted italic">
           L'adresse email et le numéro de licence sont gérés par l'administration de la ligue.
         </p>

@@ -6,7 +6,6 @@ import {
   CalendarPlus,
   UserCheck,
   UserPlus,
-  FileSpreadsheet,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -47,6 +46,19 @@ export default function AdminDashboardPage() {
       <Navbar title="Tableau de bord" />
 
       <main className="max-w-4xl mx-auto w-full px-4 md:px-6 pt-5 flex flex-col gap-6">
+        {/* Ligue Header Banner */}
+        <div className="flex items-center gap-3.5 bg-surface p-4 rounded-[12px] border border-line shadow-xs">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo-ligue.png"
+            alt="Ligue Daraâ-Tafilalet de Basketball"
+            className="w-12 h-12 object-contain"
+          />
+          <div>
+            <h1 className="text-[17px] font-bold text-ink">Ligue Daraâ-Tafilalet de Basketball</h1>
+            <p className="text-[13px] text-ink-muted">Tableau de bord Administrateur</p>
+          </div>
+        </div>
         {/* Top 3 Stats */}
         {statsLoading ? (
           <div className="grid grid-cols-3 gap-3">
@@ -73,10 +85,10 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {/* Quick Actions (2x2) */}
+        {/* Quick Actions */}
         <div className="flex flex-col gap-3">
           <h2 className="text-[18px] font-semibold text-ink">Actions rapides</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Link
               href="/admin/matches/new"
               className="p-3.5 bg-surface border border-line rounded-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.06)] flex flex-col items-center justify-center text-center gap-2 hover:border-brand/40 transition-colors"
@@ -106,17 +118,6 @@ export default function AdminDashboardPage() {
               </div>
               <span className="text-[13px] font-medium text-ink">Ajouter un arbitre</span>
             </Link>
-
-            <button
-              type="button"
-              onClick={() => toast.success("Reçus exportés en CSV")}
-              className="p-3.5 bg-surface border border-line rounded-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.06)] flex flex-col items-center justify-center text-center gap-2 hover:border-brand/40 transition-colors cursor-pointer"
-            >
-              <div className="w-10 h-10 rounded-full bg-[#FFF1E8] text-brand flex items-center justify-center">
-                <FileSpreadsheet size={20} strokeWidth={1.75} />
-              </div>
-              <span className="text-[13px] font-medium text-ink">Exporter les reçus</span>
-            </button>
           </div>
         </div>
 

@@ -143,11 +143,23 @@ export default function RefereeAssignmentDetailPage() {
     : false;
 
   const functionTranslations: Record<string, string> = {
-    "Main referee": "Arbitre principal",
-    "Second referee": "Second arbitre",
+    "1 er arbitre": "1 er arbitre",
+    "2 ème arbitre": "2 ème arbitre",
+    "1er arbitre": "1 er arbitre",
+    "2ème arbitre": "2 ème arbitre",
+    "Marqueur": "Marqueur",
+    "Aide marqueur": "Aide marqueur",
+    "Opérateur 24s": "Opérateur 24s",
+    "Chronométreur": "Chronométreur",
+    "Arbitre principal 1": "1 er arbitre",
+    "Arbitre principal 2": "2 ème arbitre",
+    "Main referee": "1 er arbitre",
+    "Second referee": "2 ème arbitre",
     "Scorer": "Marqueur",
     "Timekeeper": "Chronométreur",
     "24s operator": "Opérateur 24s",
+    "Arbitre principal": "1 er arbitre",
+    "Second arbitre": "2 ème arbitre",
   };
   const translatedFunction = functionTranslations[assignment.referee_function] || assignment.referee_function;
 

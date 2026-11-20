@@ -72,6 +72,7 @@ class RefereeSummaryOut(BaseOutSchema):
     email: str
     phone: str
     license_number: str
+    gender: str = "Homme"
     category: Optional[str] = "National Referee"
     is_active: bool = True
 
@@ -88,6 +89,7 @@ class RefereeCreate(BaseInSchema):
     email: str = Field(..., max_length=255)
     phone: str = Field(..., min_length=6, max_length=30)
     license_number: str = Field(..., min_length=1, max_length=50)
+    gender: Optional[str] = Field("Homme", pattern="^(Homme|Femme)$")
     password: Optional[str] = Field(None, min_length=8, max_length=128)
     temporary_password: Optional[str] = Field(None, min_length=8, max_length=128)
 
@@ -104,6 +106,7 @@ class RefereeUpdate(BaseInSchema):
     email: Optional[str] = Field(None, max_length=255)
     phone: Optional[str] = Field(None, min_length=6, max_length=30)
     license_number: Optional[str] = Field(None, min_length=1, max_length=50)
+    gender: Optional[str] = Field(None, pattern="^(Homme|Femme)$")
     is_active: Optional[bool] = None
 
     @field_validator("email")
@@ -125,18 +128,26 @@ class ReceiptOut(BaseOutSchema):
 
 # ----------------- ASSIGNMENTS -----------------
 
-VALID_DIVISIONS = {"1DV", "2DV"}
-VALID_CATEGORIES = {"Men", "Women", "Hommes", "Femmes"}
+VALID_DIVISIONS = {"1DV", "2DV", "3DV"}
+VALID_CATEGORIES = {
+    "Seniors", "U19", "U16", "U14", "U12", "U10", "U8",
+    "Men", "Women", "Hommes", "Femmes",
+}
 VALID_FUNCTIONS = {
-    "Main referee", "Second referee", "Scorer", "Timer", "24s operator",
-    "Arbitre principal", "Second arbitre", "Marqueur", "Chronométreur", "Opérateur 24s",
+    "1 er arbitre", "2 ème arbitre", "1er arbitre", "2ème arbitre",
+    "Marqueur", "Aide marqueur", "Opérateur 24s", "Chronométreur",
+    "Main referee", "Second referee", "Scorer", "Timer", "Timekeeper", "24s operator",
+    "Arbitre principal", "Second arbitre",
+    "Arbitre principal 1", "Arbitre principal 2",
 }
 
 class AssignmentCreate(BaseInSchema):
     referee_id: str = Field(..., min_length=1, max_length=50)
     referee_function: str = Field(..., min_length=1, max_length=100)
-    indemnity: float = Field(..., gt=0, le=100000)
-    paying_team_id: str = Field(..., min_length=1, max_length=50)
+    indemnity: Optional[float] = Field(0.0, ge=0, le=100000)
+    indemnity_home: Optional[float] = Field(None, ge=0, le=100000)
+    indemnity_away: Optional[float] = Field(None, ge=0, le=100000)
+    paying_team_id: Optional[str] = Field(None, max_length=50)
 
     @field_validator("referee_function")
     @classmethod
@@ -161,6 +172,7 @@ class MatchSummaryOut(BaseOutSchema):
     venue: str
     division: str
     category: str
+    gender: Optional[str] = "Homme"
     status: str = "scheduled"
 
 class AssignmentOut(BaseOutSchema):
@@ -171,7 +183,9 @@ class AssignmentOut(BaseOutSchema):
     referee: Optional[RefereeSummaryOut] = None
     referee_function: str
     indemnity: float
-    paying_team_id: str
+    indemnity_home: Optional[float] = None
+    indemnity_away: Optional[float] = None
+    paying_team_id: Optional[str] = None
     paying_team: Optional[TeamOut] = None
     status: str
     refusal_reason: Optional[str] = None
@@ -204,6 +218,7 @@ class MatchCreate(BaseInSchema):
     venue: str = Field(..., min_length=1, max_length=150)
     division: str = Field(..., min_length=1, max_length=50)
     category: str = Field(..., min_length=1, max_length=50)
+    gender: Optional[str] = Field("Homme", max_length=20)
     assignments: List[AssignmentCreate]
 
     @field_validator("division")
@@ -211,16 +226,17 @@ class MatchCreate(BaseInSchema):
     def validate_division(cls, v: str) -> str:
         clean = v.strip()
         if clean not in VALID_DIVISIONS:
-            raise ValueError(f"Division invalide: {clean}. Valeurs acceptées: 1DV, 2DV")
+            raise ValueError(f"Division invalide: {clean}. Valeurs acceptées: 1DV, 2DV, 3DV")
         return clean
 
     @field_validator("category")
     @classmethod
     def validate_category(cls, v: str) -> str:
         clean = v.strip()
-        if clean not in VALID_CATEGORIES:
-            raise ValueError(f"Catégorie invalide: {clean}. Valeurs acceptées: Men, Women")
-        return clean
+        matched = next((c for c in VALID_CATEGORIES if c.lower() == clean.lower()), None)
+        if not matched:
+            raise ValueError(f"Catégorie invalide: {clean}. Valeurs acceptées: Seniors, U19, U16, U14, U12, U10, U8")
+        return matched
 
 class MatchUpdate(BaseInSchema):
     home_team_id: Optional[str] = Field(None, max_length=50)
@@ -232,6 +248,7 @@ class MatchUpdate(BaseInSchema):
     venue: Optional[str] = Field(None, min_length=1, max_length=150)
     division: Optional[str] = Field(None, max_length=50)
     category: Optional[str] = Field(None, max_length=50)
+    gender: Optional[str] = Field(None, max_length=20)
     assignments: Optional[List[AssignmentCreate]] = None
 
     @field_validator("division")
@@ -241,7 +258,7 @@ class MatchUpdate(BaseInSchema):
             return v
         clean = v.strip()
         if clean not in VALID_DIVISIONS:
-            raise ValueError(f"Division invalide: {clean}. Valeurs acceptées: 1DV, 2DV")
+            raise ValueError(f"Division invalide: {clean}. Valeurs acceptées: 1DV, 2DV, 3DV")
         return clean
 
     @field_validator("category")
@@ -250,9 +267,10 @@ class MatchUpdate(BaseInSchema):
         if v is None:
             return v
         clean = v.strip()
-        if clean not in VALID_CATEGORIES:
-            raise ValueError(f"Catégorie invalide: {clean}. Valeurs acceptées: Men, Women")
-        return clean
+        matched = next((c for c in VALID_CATEGORIES if c.lower() == clean.lower()), None)
+        if not matched:
+            raise ValueError(f"Catégorie invalide: {clean}. Valeurs acceptées: Seniors, U19, U16, U14, U12, U10, U8")
+        return matched
 
 class MatchOut(MatchSummaryOut):
     assignments: List[AssignmentOut] = []

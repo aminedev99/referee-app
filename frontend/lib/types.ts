@@ -1,13 +1,23 @@
 export type Role = "admin" | "referee";
 export type AssignmentStatus = "pending" | "confirmed" | "refused";
-export type MatchDivision = "1DV" | "2DV";
-export type MatchCategory = "Men" | "Women";
+export type MatchDivision = "1DV" | "2DV" | "3DV";
+export type MatchCategory = "Seniors" | "U19" | "U16" | "U14" | "U12" | "U10" | "U8" | "Men" | "Women";
 export type RefereeFunction =
+  | "1 er arbitre"
+  | "2 ème arbitre"
+  | "Marqueur"
+  | "Aide marqueur"
+  | "Opérateur 24s"
+  | "Chronométreur"
+  | "1er arbitre"
+  | "2ème arbitre"
   | "Main referee"
   | "Second referee"
   | "Scorer"
   | "Timekeeper"
-  | "24s operator";
+  | "24s operator"
+  | "Arbitre principal 1"
+  | "Arbitre principal 2";
 
 export interface User {
   id: string;
@@ -32,6 +42,7 @@ export interface Referee {
   email: string;
   phone: string;
   license_number: string;
+  gender?: "Homme" | "Femme";
   category?: string; // e.g. "National Referee"
   is_active?: boolean;
   matches_count: number;
@@ -49,7 +60,9 @@ export interface Assignment {
   referee?: Referee;
   referee_function: RefereeFunction | string;
   indemnity: number;
-  paying_team_id: string;
+  indemnity_home?: number;
+  indemnity_away?: number;
+  paying_team_id?: string;
   paying_team?: Team;
   status: AssignmentStatus;
   refusal_reason?: string;
@@ -72,6 +85,7 @@ export interface Match {
   venue: string;
   division: MatchDivision;
   category: MatchCategory;
+  gender?: "Homme" | "Femme";
   status: "scheduled" | "cancelled" | string;
   assignments: Assignment[];
 }
@@ -134,11 +148,14 @@ export interface CreateMatchInput {
   venue: string;
   division: MatchDivision;
   category: MatchCategory;
+  gender?: "Homme" | "Femme";
   assignments: {
     referee_id: string;
     referee_function: string;
     indemnity: number;
-    paying_team_id: string;
+    indemnity_home?: number;
+    indemnity_away?: number;
+    paying_team_id?: string;
   }[];
 }
 
@@ -148,6 +165,7 @@ export interface CreateRefereeInput {
   email: string;
   phone: string;
   license_number: string;
+  gender?: "Homme" | "Femme";
   password?: string;
   temporary_password?: string;
 }
@@ -157,6 +175,7 @@ export interface UpdateRefereeInput {
   email?: string;
   phone?: string;
   license_number?: string;
+  gender?: "Homme" | "Femme";
   is_active?: boolean;
 }
 

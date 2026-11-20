@@ -26,7 +26,9 @@ const refereeAssignmentSchema = z.object({
   referee_id: z.string().min(1, "Sélectionnez un arbitre"),
   referee_function: z.string().min(1, "Sélectionnez une fonction"),
   indemnity: z.number().min(1, "L'indemnité doit être supérieure à 0"),
-  paying_team_id: z.string().min(1, "Sélectionnez l'équipe payeuse"),
+  indemnity_home: z.number().optional(),
+  indemnity_away: z.number().optional(),
+  paying_team_id: z.string().optional(),
 });
 
 const matchFormSchema = z
@@ -37,8 +39,9 @@ const matchFormSchema = z
     time: z.string().min(1, "L'heure est requise"),
     city: z.string().min(1, "La ville est requise"),
     venue: z.string().min(1, "La salle est requise"),
-    division: z.enum(["1DV", "2DV"]),
-    category: z.enum(["Men", "Women"]),
+    division: z.enum(["1DV", "2DV", "3DV"]),
+    category: z.enum(["Seniors", "U19", "U16", "U14", "U12", "U10", "U8", "Men", "Women"]),
+    gender: z.enum(["Homme", "Femme"]).optional().default("Homme"),
     assignments: z
       .array(refereeAssignmentSchema)
       .min(1, "Au moins un arbitre est requis"),
@@ -69,11 +72,23 @@ export interface MatchFormProps {
 }
 
 const functionTranslations: Record<string, string> = {
-  "Main referee": "Arbitre principal",
-  "Second referee": "Second arbitre",
+  "1 er arbitre": "1 er arbitre",
+  "2 ème arbitre": "2 ème arbitre",
+  "1er arbitre": "1 er arbitre",
+  "2ème arbitre": "2 ème arbitre",
+  "Marqueur": "Marqueur",
+  "Aide marqueur": "Aide marqueur",
+  "Opérateur 24s": "Opérateur 24s",
+  "Chronométreur": "Chronométreur",
+  "Arbitre principal 1": "1 er arbitre",
+  "Arbitre principal 2": "2 ème arbitre",
+  "Main referee": "1 er arbitre",
+  "Second referee": "2 ème arbitre",
   "Scorer": "Marqueur",
   "Timekeeper": "Chronométreur",
   "24s operator": "Opérateur 24s",
+  "Arbitre principal": "1 er arbitre",
+  "Second arbitre": "2 ème arbitre",
 };
 
 export const MatchForm: React.FC<MatchFormProps> = ({
@@ -99,18 +114,24 @@ export const MatchForm: React.FC<MatchFormProps> = ({
     referee_id: a.referee_id,
     referee_function: a.referee_function,
     indemnity: a.indemnity,
-    paying_team_id: a.paying_team_id,
+    indemnity_home: a.indemnity_home ?? a.indemnity,
+    indemnity_away: a.indemnity_away ?? a.indemnity,
+    paying_team_id: a.paying_team_id || "",
   })) || [
     {
       referee_id: activeReferees[0]?.id || "",
-      referee_function: "Main referee",
+      referee_function: "1 er arbitre",
       indemnity: 400,
+      indemnity_home: 400,
+      indemnity_away: 400,
       paying_team_id: teams[0]?.id || "",
     },
     {
       referee_id: activeReferees[1]?.id || "",
-      referee_function: "Second referee",
+      referee_function: "2 ème arbitre",
       indemnity: 300,
+      indemnity_home: 300,
+      indemnity_away: 300,
       paying_team_id: teams[1]?.id || "",
     },
   ];
@@ -131,7 +152,8 @@ export const MatchForm: React.FC<MatchFormProps> = ({
       city: initialData?.city || "",
       venue: initialData?.venue || "",
       division: (initialData?.division as MatchDivision) || "1DV",
-      category: (initialData?.category as MatchCategory) || "Men",
+      category: (initialData?.category as MatchCategory) || "Seniors",
+      gender: (initialData?.gender as "Homme" | "Femme") || "Homme",
       assignments: defaultAssignments,
     },
   });
@@ -177,10 +199,17 @@ export const MatchForm: React.FC<MatchFormProps> = ({
       setConflictError(null);
       await onSubmit({
         ...pendingValues,
-        assignments: pendingValues.assignments.map((a) => ({
-          ...a,
-          indemnity: Number(a.indemnity),
-        })),
+        assignments: pendingValues.assignments.map((a) => {
+          const baseInd = Number(a.indemnity) || 0;
+          return {
+            referee_id: a.referee_id,
+            referee_function: a.referee_function,
+            indemnity: baseInd,
+            indemnity_home: baseInd,
+            indemnity_away: baseInd,
+            paying_team_id: a.paying_team_id || pendingValues.home_team_id || teams[0]?.id || "",
+          };
+        }),
       });
       setShowConfirm(false);
     } catch (err: unknown) {
@@ -298,6 +327,7 @@ export const MatchForm: React.FC<MatchFormProps> = ({
                   options={[
                     { value: "1DV", label: "1DV" },
                     { value: "2DV", label: "2DV" },
+                    { value: "3DV", label: "3DV" },
                   ]}
                   value={field.value}
                   onChange={field.onChange}
@@ -306,22 +336,36 @@ export const MatchForm: React.FC<MatchFormProps> = ({
             />
           </Field>
 
-          <Field label="Catégorie">
-            <Controller
-              control={control}
-              name="category"
-              render={({ field }) => (
-                <SegmentedControl<MatchCategory>
-                  options={[
-                    { value: "Men", label: "Hommes" },
-                    { value: "Women", label: "Femmes" },
-                  ]}
-                  value={field.value}
-                  onChange={field.onChange}
-                />
-              )}
-            />
-          </Field>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Catégorie" htmlFor="category" error={errors.category?.message} required>
+              <Select id="category" {...register("category")}>
+                <option value="Seniors">Seniors</option>
+                <option value="U19">U19</option>
+                <option value="U16">U16</option>
+                <option value="U14">U14</option>
+                <option value="U12">U12</option>
+                <option value="U10">U10</option>
+                <option value="U8">U8</option>
+              </Select>
+            </Field>
+
+            <Field label="Sexe">
+              <Controller
+                control={control}
+                name="gender"
+                render={({ field }) => (
+                  <SegmentedControl<"Homme" | "Femme">
+                    options={[
+                      { value: "Homme", label: "Homme" },
+                      { value: "Femme", label: "Femme" },
+                    ]}
+                    value={field.value || "Homme"}
+                    onChange={field.onChange}
+                  />
+                )}
+              />
+            </Field>
+          </div>
         </div>
 
         {/* Referees Section */}
@@ -413,16 +457,17 @@ export const MatchForm: React.FC<MatchFormProps> = ({
                       required
                     >
                       <Select {...register(`assignments.${index}.referee_function`)}>
-                        <option value="Main referee">Arbitre principal</option>
-                        <option value="Second referee">Second arbitre</option>
-                        <option value="Scorer">Marqueur</option>
-                        <option value="Timekeeper">Chronométreur</option>
-                        <option value="24s operator">Opérateur 24s</option>
+                        <option value="1 er arbitre">1 er arbitre</option>
+                        <option value="2 ème arbitre">2 ème arbitre</option>
+                        <option value="Marqueur">Marqueur</option>
+                        <option value="Aide marqueur">Aide marqueur</option>
+                        <option value="Opérateur 24s">Opérateur 24s</option>
+                        <option value="Chronométreur">Chronométreur</option>
                       </Select>
                     </Field>
 
                     <Field
-                      label="Indemnité (MAD)"
+                      label="Indemnité par équipe (MAD)"
                       error={fieldError?.indemnity?.message}
                       required
                     >
@@ -436,20 +481,12 @@ export const MatchForm: React.FC<MatchFormProps> = ({
                     </Field>
                   </div>
 
-                  <Field
-                    label="Équipe payeuse"
-                    error={fieldError?.paying_team_id?.message}
-                    required
-                  >
-                    <Select {...register(`assignments.${index}.paying_team_id`)}>
-                      <option value="">Sélectionnez l'équipe payeuse</option>
-                      {teams.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
+                  <div className="rounded-[8px] bg-canvas/60 p-2.5 text-[12px] text-ink-muted flex items-center justify-between border border-line/60">
+                    <span>Répartition des frais :</span>
+                    <span className="font-medium text-ink">
+                      2 reçus générés
+                    </span>
+                  </div>
                 </Card>
               );
             })}
@@ -463,7 +500,7 @@ export const MatchForm: React.FC<MatchFormProps> = ({
             onClick={() =>
               append({
                 referee_id: "",
-                referee_function: "Second referee",
+                referee_function: "2 ème arbitre",
                 indemnity: 300,
                 paying_team_id: homeTeamId || teams[0]?.id || "",
               })

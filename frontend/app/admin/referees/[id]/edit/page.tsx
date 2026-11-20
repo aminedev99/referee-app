@@ -27,6 +27,7 @@ function RefereeEditForm({ referee }: { referee: Referee }) {
   const [email, setEmail] = useState(referee.email || "");
   const [phone, setPhone] = useState(formatPhone(referee.phone));
   const [license, setLicense] = useState(referee.license_number || "");
+  const [gender, setGender] = useState<"Homme" | "Femme">(referee.gender === "Femme" ? "Femme" : "Homme");
   const [isActive, setIsActive] = useState(referee.is_active !== false);
 
   // Modals state
@@ -100,6 +101,7 @@ function RefereeEditForm({ referee }: { referee: Referee }) {
       email: email.trim(),
       phone: phone.trim(),
       license_number: license.trim(),
+      gender,
       is_active: isActive,
     });
   };
@@ -160,6 +162,33 @@ function RefereeEditForm({ referee }: { referee: Referee }) {
                 />
               </Field>
             </div>
+
+            <Field label="Sexe" required>
+              <div className="flex items-center gap-6 pt-1">
+                <label className="flex items-center gap-2 cursor-pointer text-[14px] text-ink font-medium">
+                  <input
+                    type="radio"
+                    name="edit-gender"
+                    value="Homme"
+                    checked={gender === "Homme"}
+                    onChange={() => setGender("Homme")}
+                    className="accent-brand w-4 h-4 cursor-pointer"
+                  />
+                  Homme (MR)
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-[14px] text-ink font-medium">
+                  <input
+                    type="radio"
+                    name="edit-gender"
+                    value="Femme"
+                    checked={gender === "Femme"}
+                    onChange={() => setGender("Femme")}
+                    className="accent-brand w-4 h-4 cursor-pointer"
+                  />
+                  Femme (MS)
+                </label>
+              </div>
+            </Field>
 
             {/* Active Toggle Switch */}
             <div className="flex items-center justify-between pt-2 border-t border-line">

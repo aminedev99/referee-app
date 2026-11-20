@@ -113,9 +113,9 @@ def create_receipt(
         notify(
             db,
             assignment.referee.user_id,
-            f"Receipt available: {match_str}",
+            f"Reçu disponible pour la rencontre {match_str}",
             type="receipt",
-            title="Receipt available",
+            title="Reçu disponible",
         )
 
     db.commit()
